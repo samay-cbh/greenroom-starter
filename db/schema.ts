@@ -125,6 +125,30 @@ export const deals = sqliteTable("deals", {
   bonusesJson: text("bonuses_json"),
   dealNotesFreetext: text("deal_notes_freetext"),
 
+  // Added: recoup ordering field. null = not yet specified (the Coastal Spell bug state).
+  // "inside_cap"  → recoup counts within the expense cap ceiling
+  // "outside_cap" → recoup is a separate gross deduction before % math
+  recoupBasis: text("recoup_basis", { enum: ["inside_cap", "outside_cap"] }),
+
+  // Stored result of notes→fields extraction. Written on every dealNotesFreetext save.
+  // Shape: { extractedAt, contradictions: [...], ambiguities: [...] }
+  notesExtractionJson: text("notes_extraction_json"),
+
+  // NEW: The "Negotiated Truth" extracted by AI directly from the prose.
+  // Stays separate from manual fields to allow drift detection.
+  shadowDealJson: text("shadow_deal_json"),
+
+  // Whether hospitality expenses are deducted inside the expense cap ceiling
+  // ("inside_cap") or as a separate gross deduction before cap math ("outside_cap").
+  // null = not yet decided — the badge will prompt the user.
+  hospitalityBasis: text("hospitality_basis", {
+    enum: ["inside_cap", "outside_cap"],
+  }),
+
+  // JSON array of field names the user has dismissed from the shadow-deal
+  // comparison panel. Cleared whenever deal notes are saved (new shadow = fresh start).
+  shadowDismissalsJson: text("shadow_dismissals_json"),
+
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

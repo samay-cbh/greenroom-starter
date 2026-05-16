@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/card";
 import { StatusBadge, DealTypeBadge, PlainBadge } from "@/components/ui/badge";
 import { calculateSettlement } from "@/lib/dealMath";
+import { isPositiveSignoff } from "@/lib/settlementStage";
 import {
   formatMoney,
   formatShowDateFull,
@@ -145,7 +146,7 @@ export default async function SettlePage({
         {recoups.length > 0 && <RecoupsSection recoups={recoups} />}
 
         {settlement && (settlement.signoffText || settlement.notes) && (
-          <SignoffSection settlement={settlement} />
+          <SignoffSection settlement={settlement} isDisputed={isDisputed} />
         )}
       </div>
 
@@ -658,17 +659,41 @@ function RecoupsSection({ recoups }: { recoups: Recoup[] }) {
   );
 }
 
-function SignoffSection({ settlement }: { settlement: Settlement }) {
+function SignoffSection({
+  settlement,
+  isDisputed,
+}: {
+  settlement: Settlement;
+  isDisputed: boolean;
+}) {
+  const postSignoffDispute = isDisputed && isPositiveSignoff(settlement.signoffText);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Sign-off & notes</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
+        {postSignoffDispute && (
+          <div className="rounded-lg border border-amber-200/70 bg-amber-50/50 p-4 flex gap-3">
+            <AlertTriangle className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+            <div>
+              <div className="text-[13px] font-semibold text-amber-900">
+                Post-signoff dispute
+              </div>
+              <p className="text-[12.5px] text-ink-600 mt-1 leading-relaxed">
+                The tour manager approved on the night. The dispute was raised
+                afterward by the agent or management reviewing the statement.
+                These are two separate events — the TM sign-off below is not a
+                contradiction.
+              </p>
+            </div>
+          </div>
+        )}
         {settlement.signoffText && (
           <div>
             <div className="eyebrow text-[10px] text-ink-500 mb-2">
-              From the artist team
+              {postSignoffDispute ? "Tour manager sign-off (on the night)" : "From the artist team"}
             </div>
             <div className="text-[13px] text-ink-800 bg-canvas-soft rounded-lg p-4 ring-1 ring-ink-200/60 leading-relaxed">
               &ldquo;{settlement.signoffText}&rdquo;

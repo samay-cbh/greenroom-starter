@@ -18,7 +18,12 @@ import {
 } from "@/components/ui/card";
 import { StatusBadge, DealTypeBadge, PlainBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { parseBonuses } from "@/lib/dealMath";
+import { parseBonuses, calculateSettlement } from "@/lib/dealMath";
+import { parseStoredExtraction, isRateLimited } from "@/lib/notesExtractor";
+import { parseShadowDeal, parseShadowDismissals, compareShadowToFields } from "@/lib/shadowComparison";
+import { NotesEditor } from "./notes-editor";
+import { NotesExtractionBadge } from "./notes-extraction-badge";
+import { CapTracker } from "./cap-tracker";
 import {
   formatMoney,
   formatMoneyCompact,
@@ -55,6 +60,7 @@ export default async function ShowDetailPage({
     settlement,
     ticketSales,
     expenses,
+    recoups,
     comps,
   } = data;
 
@@ -74,6 +80,25 @@ export default async function ShowDetailPage({
     .reduce((s, c) => s + c.count, 0);
 
   const bonuses = deal ? parseBonuses(deal) : [];
+
+  // Layer C: settlement preview — run the math now so Mariana can see the
+  // estimated payout on the detail page, not just on settlement night.
+  const calc = deal
+    ? calculateSettlement({ deal, ticketSales, expenses, venueCapacity: data.venue?.capacity ?? undefined })
+    : null;
+
+  // Layer A: read cached extraction result. Rate-limit state is passed separately
+  // so the badge can show "quota exceeded, retry after X" instead of the generic button.
+  const notesExtraction = deal ? parseStoredExtraction(deal.notesExtractionJson) : null;
+  const rateLimitInfo = deal ? isRateLimited(deal.notesExtractionJson) : { limited: false };
+
+  // Live shadow comparison: runs every page load from stored shadow — no AI call.
+  const shadowDeal = deal ? parseShadowDeal(deal.shadowDealJson) : null;
+  const dismissedFields = deal ? parseShadowDismissals(deal.shadowDismissalsJson) : [];
+  const { contradictions: liveContradictions, ambiguities: liveAmbiguities } =
+    shadowDeal && deal
+      ? compareShadowToFields(shadowDeal, deal, dismissedFields, expenses)
+      : { contradictions: [], ambiguities: [] };
 
   const isDisputed = settlement?.status === "disputed";
 
@@ -238,14 +263,72 @@ export default async function ShowDetailPage({
                     </div>
                   )}
 
-                  {deal.dealNotesFreetext && (
-                    <div>
-                      <div className="eyebrow text-[10px] text-ink-500 mb-2">
-                        Deal notes (free text — what Mariana actually trusts)
-                      </div>
+                  {/* Layer B — expense cap tracker */}
+                  <CapTracker deal={deal} expenses={expenses} />
+
+                  {/* Layer A — deal notes with AI extraction */}
+                  <div>
+                    <div className="eyebrow text-[10px] text-ink-500 mb-2">
+                      Deal notes (free text — what Mariana actually trusts)
+                    </div>
+                    {deal.dealNotesFreetext ? (
                       <div className="text-[13px] text-ink-800 bg-canvas-soft rounded-lg p-4 ring-1 ring-ink-200/50 leading-relaxed font-[450]" style={{ fontStyle: "italic" }}>
                         {deal.dealNotesFreetext}
                       </div>
+                    ) : (
+                      <div className="text-[13px] text-ink-400 bg-canvas-soft rounded-lg p-4 ring-1 ring-ink-200/50">
+                        No notes yet — add the deal terms from the agent email.
+                      </div>
+                    )}
+                    <NotesEditor showId={show.id} currentNotes={deal.dealNotesFreetext ?? null} />
+                    <NotesExtractionBadge
+                      showId={show.id}
+                      hasNotes={!!deal.dealNotesFreetext}
+                      shadowDeal={shadowDeal}
+                      cached={notesExtraction}
+                      liveContradictions={liveContradictions}
+                      liveAmbiguities={liveAmbiguities}
+                      dismissedFields={dismissedFields}
+                      rateLimited={rateLimitInfo.limited}
+                      rateLimitRetryAfter={rateLimitInfo.retryAfter}
+                    />
+                  </div>
+
+                  {/* Layer C — settlement preview */}
+                  {calc?.supported && (
+                    <div className="rounded-lg ring-1 ring-ink-200/50 bg-canvas-soft p-4">
+                      <div className="eyebrow text-[10px] text-ink-500 mb-3">Estimated payout (based on current data)</div>
+                      <div className="flex items-baseline gap-2 mb-3">
+                        <span className="font-display text-[28px] font-medium text-ink-900" style={{ letterSpacing: "-0.02em" }}>
+                          {formatMoney(calc.totalToArtist)}
+                        </span>
+                        <span className="text-[12px] text-ink-400">to artist</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {calc.steps.map((step, i) => (
+                          <div key={i} className="flex items-start justify-between gap-3 text-[12px]">
+                            <span className="text-ink-500 leading-relaxed">{step.label}</span>
+                            <span className="font-mono tabular-nums shrink-0 text-ink-800">
+                              {formatMoney(step.value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 text-[11px] text-ink-400">{calc.finalFormula}</div>
+                      
+                      {calc.calculationTrace.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-ink-200/40">
+                          <div className="eyebrow text-[9px] text-amber-600 mb-2 font-bold uppercase tracking-wider">Negotiated Intent (Provenance)</div>
+                          <div className="space-y-2">
+                            {calc.calculationTrace.map((t, i) => (
+                              <div key={i} className="text-[11.5px] leading-relaxed">
+                                <span className="font-medium text-ink-700 capitalize">{t.field.replace(/([A-Z])/g, ' $1')}:</span>{" "}
+                                <span className="text-ink-500 italic">"{t.quote}"</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

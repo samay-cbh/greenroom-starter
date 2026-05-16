@@ -94,6 +94,19 @@ export function nextStages(stage: SettlementStage): SettlementStage[] {
   }
 }
 
+/**
+ * Returns true when the signoff text reads as an approval.
+ * Used to distinguish TM-night sign-off from a post-signoff dispute
+ * raised later by the agent or management.
+ */
+export function isPositiveSignoff(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return !["no ", "dispute", "question", "hold", "problem", "issue", "wrong", "not "].some(
+    (w) => lower.includes(w)
+  );
+}
+
 /** Returns the stages this settlement has been through, in order, with timestamps. */
 export function stageHistory(s: Settlement) {
   const history: { stage: SettlementStage; at: Date }[] = [];
