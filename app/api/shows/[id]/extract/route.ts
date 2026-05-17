@@ -3,8 +3,8 @@ import { getShowById } from "@/lib/queries";
 import { extractAndStoreNotes } from "@/lib/notesExtractor";
 
 // POST /api/shows/[id]/extract
-// Triggers first-time notes extraction for shows where notesExtractionJson is null.
-// Called by NotesExtractionBadge on mount when no cached result exists.
+// Triggers a fresh AI extraction run. Called when the user clicks "Re-run AI check"
+// in the NotesExtractionBadge. Writes result to notesExtractionJson and shadowDealJson.
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

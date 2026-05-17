@@ -25,10 +25,6 @@ export function CapTracker({
     .filter((e) => e.category === "hospitality")
     .reduce((s, e) => s + e.amount, 0);
 
-  const nonHospitality = passedThrough
-    .filter((e) => e.category !== "hospitality")
-    .reduce((s, e) => s + e.amount, 0);
-
   const rows: {
     label: string;
     spent: number;

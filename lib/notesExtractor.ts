@@ -159,8 +159,6 @@ Return everything in the requested JSON format.
 CRITICAL RULE 1: Build the shadowDeal EXCLUSIVELY from the "Deal notes". 
 CRITICAL RULE 2: DO NOT use any numbers or values found in the "Current structured fields" section to populate the shadowDeal. Those fields are ONLY for Step 2 (finding contradictions).
 CRITICAL RULE 3: If a value (like expenseCap or recoupBasis) is NOT explicitly mentioned in the notes, you MUST leave it null. Never guess or reuse values.
-
-(Internal Request ID: ${Date.now()})
 `;
 
 // -------- Format helpers --------
@@ -206,10 +204,12 @@ ${deal.dealNotesFreetext}
 ${describeFields(deal)}
 
 TASK:
-1. Build a Shadow Deal EXCLUSIVELY from [DEAL NOTES]. 
+1. Build a Shadow Deal EXCLUSIVELY from [DEAL NOTES].
    - DO NOT look at [CURRENT STRUCTURED FIELDS] when deciding what belongs in the shadowDeal.
    - If a value is not in [DEAL NOTES], set it to null.
 2. Compare your extracted Shadow Deal against [CURRENT STRUCTURED FIELDS] to find contradictions.
+
+(Request ID: ${Date.now()})
 `;
 
   let raw: NotesExtractionResult;
