@@ -168,21 +168,106 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
     };
   }
 
-  // ---------- everything else: not supported ----------
-  const friendlyName: Record<Deal["dealType"], string> = {
-    flat: "Flat guarantee",
-    percentage_of_gross: "Percentage of gross",
-    percentage_of_net: "Percentage of net",
-    vs: "Vs deal (guarantee vs %)",
-    door: "Door deal",
-  };
+  // ---------- percentage of net ----------
+  if (deal.dealType === "percentage_of_net") {
+    if (deal.percentage == null) {
+      return {
+        supported: false,
+        reason: "Percentage-of-net deal is missing a percentage.",
+        dealType: deal.dealType,
+      };
+    }
+    const cappedExpenses = deal.expenseCap != null
+      ? Math.min(totalExpenses, deal.expenseCap)
+      : totalExpenses;
+    const netBoxOffice = grossBoxOffice - totalFees - cappedExpenses;
+    const payout = Math.max(0, netBoxOffice) * deal.percentage;
+    const bonusResult = applyBonuses(parseBonuses(deal), {
+      gross: grossBoxOffice,
+      tickets,
+      capacity: venueCapacity,
+    });
 
+    const steps: { label: string; value: number; note?: string }[] = [
+      { label: "Gross box office", value: grossBoxOffice },
+      { label: "− Ticketing fees", value: -totalFees },
+      { label: "− Approved expenses", value: -cappedExpenses,
+        note: deal.expenseCap != null && totalExpenses > deal.expenseCap
+          ? `Capped at $${deal.expenseCap.toLocaleString()} (actual $${totalExpenses.toLocaleString()})`
+          : undefined },
+      { label: "= Net box office", value: netBoxOffice },
+      { label: `× ${(deal.percentage * 100).toFixed(0)}%`, value: payout },
+      ...bonusResult.applied.map((b) => ({ label: b.label, value: b.amount, note: b.reason })),
+    ];
+
+    return {
+      supported: true,
+      grossBoxOffice,
+      netBoxOffice,
+      totalExpenses: cappedExpenses,
+      totalToArtist: payout + bonusResult.totalApplied,
+      steps,
+      finalFormula: `(gross − fees − expenses) × ${deal.percentage} = ${payout.toFixed(2)}`,
+      bonusesApplied: bonusResult.applied,
+      bonusesNotTriggered: bonusResult.notTriggered,
+    };
+  }
+
+  // ---------- vs deal (guarantee vs % of net, whichever is greater) ----------
+  if (deal.dealType === "vs") {
+    if (deal.guaranteeAmount == null || deal.percentage == null) {
+      return {
+        supported: false,
+        reason: "Vs deal requires both a guarantee amount and a percentage.",
+        dealType: deal.dealType,
+      };
+    }
+    const cappedExpenses = deal.expenseCap != null
+      ? Math.min(totalExpenses, deal.expenseCap)
+      : totalExpenses;
+    const netBoxOffice = grossBoxOffice - totalFees - cappedExpenses;
+    const percentageSide = Math.max(0, netBoxOffice) * deal.percentage;
+    const guaranteeSide = deal.guaranteeAmount;
+    const baseAmount = Math.max(guaranteeSide, percentageSide);
+    const bonusResult = applyBonuses(parseBonuses(deal), {
+      gross: grossBoxOffice,
+      tickets,
+      capacity: venueCapacity,
+    });
+
+    const percentageWon = percentageSide > guaranteeSide;
+    const steps: { label: string; value: number; note?: string }[] = [
+      { label: "Flat guarantee", value: guaranteeSide, note: percentageWon ? "Not triggered" : "Applied — higher of the two" },
+      { label: "Gross box office", value: grossBoxOffice },
+      { label: "− Ticketing fees", value: -totalFees },
+      { label: "− Approved expenses", value: -cappedExpenses,
+        note: deal.expenseCap != null && totalExpenses > deal.expenseCap
+          ? `Capped at $${deal.expenseCap.toLocaleString()} (actual $${totalExpenses.toLocaleString()})`
+          : undefined },
+      { label: "= Net box office", value: netBoxOffice },
+      { label: `× ${(deal.percentage * 100).toFixed(0)}% (percentage side)`, value: percentageSide, note: percentageWon ? "Applied — higher of the two" : "Not triggered" },
+      { label: "= Artist base (higher side wins)", value: baseAmount },
+      ...bonusResult.applied.map((b) => ({ label: b.label, value: b.amount, note: b.reason })),
+    ];
+
+    return {
+      supported: true,
+      grossBoxOffice,
+      netBoxOffice,
+      totalExpenses: cappedExpenses,
+      totalToArtist: baseAmount + bonusResult.totalApplied,
+      steps,
+      finalFormula: `max($${guaranteeSide.toLocaleString()} guarantee, net × ${deal.percentage}) = ${baseAmount.toFixed(2)}`,
+      bonusesApplied: bonusResult.applied,
+      bonusesNotTriggered: bonusResult.notTriggered,
+    };
+  }
+
+  // ---------- everything else: not supported ----------
   return {
     supported: false,
     dealType: deal.dealType,
-    reason:
-      `${friendlyName[deal.dealType]} deals aren't supported in the in-app tool yet. ` +
-      `Power users at venues like The Crescent default to spreadsheets for these.`,
+    reason: "Door deals aren't supported in the in-app tool yet.",
   };
 }
 
