@@ -33,6 +33,21 @@ interface CalcResult {
   cappedExpenses: number;
 }
 
+type WalkoutCandidate = { label: string; threshold: number; percentage: number; value: number };
+
+function getWalkoutCandidates(bonuses: ParsedDealTerms["bonuses"], gross: number): WalkoutCandidate[] {
+  return bonuses
+    .filter((b): b is Extract<ParsedDealTerms["bonuses"][number], { type: "gross_percentage_above_threshold" }> =>
+      b.type === "gross_percentage_above_threshold"
+    )
+    .map((b) => ({
+      label: b.label,
+      threshold: b.threshold,
+      percentage: b.percentage,
+      value: gross > b.threshold ? (gross - b.threshold) * b.percentage : 0,
+    }));
+}
+
 function applyBonuses(
   bonuses: ParsedDealTerms["bonuses"],
   gross: number,
@@ -41,22 +56,14 @@ function applyBonuses(
   let total = 0;
   for (const b of bonuses) {
     if (b.type === "gross_percentage_above_threshold") {
-      if (gross > b.threshold) {
-        const amount = (gross - b.threshold) * b.percentage;
-        steps.push({
-          label: b.label,
-          value: amount,
-          note: `${(b.percentage * 100).toFixed(0)}% × ($${gross.toLocaleString()} − $${b.threshold.toLocaleString()})`,
-        });
-        total += amount;
-      }
+      // Handled as a vs-deal candidate, not an additive bonus — skip here.
     } else if (b.type === "gross_threshold") {
       if (gross >= b.threshold) {
         steps.push({ label: b.label, value: b.amount, note: `Gross $${gross.toLocaleString()} ≥ $${b.threshold.toLocaleString()}` });
         total += b.amount;
       }
     } else if (b.type === "sellout") {
-      // Sellout requires capacity — skip client-side, shown separately
+      // Sellout requires capacity — skip client-side
     } else if (b.type === "attendance_threshold") {
       // Attendance requires ticket count — skip client-side
     }
@@ -142,29 +149,40 @@ function runCalculation(
     const g = terms.guaranteeAmount ?? 0;
     const pct = terms.percentage ?? 0;
     const percentageSide = Math.max(0, netBoxOffice) * pct;
-    const percentageWon = percentageSide > g;
-    const base = Math.max(g, percentageSide);
+
+    const walkouts = getWalkoutCandidates(terms.bonuses, grossBoxOffice);
+    const walkoutMax = walkouts.length > 0 ? Math.max(...walkouts.map((w) => w.value)) : 0;
+    const base = Math.max(g, percentageSide, walkoutMax);
+
+    const guaranteeWon = base === g && g >= percentageSide && g >= walkoutMax;
+    const percentageWon = percentageSide > g && percentageSide >= walkoutMax;
+    const walkoutWon = walkoutMax > g && walkoutMax > percentageSide;
+
+    const regularBonuses = terms.bonuses.filter((b) => b.type !== "gross_percentage_above_threshold");
+    const regularResult = applyBonuses(regularBonuses, grossBoxOffice);
+
     return {
       supported: true,
-      totalToArtist: base + bonusResult.total,
+      totalToArtist: base + regularResult.total,
       grossBoxOffice,
       netBoxOffice,
       cappedExpenses,
       steps: [
-        { label: "Flat guarantee", value: g, note: percentageWon ? "Not applied — percentage side is higher" : "Applied — higher of the two" },
+        { label: "Flat guarantee", value: g, note: guaranteeWon ? "Applied — highest option" : "Not applied" },
         { label: "Gross box office", value: grossBoxOffice },
         { label: "− Ticketing fees", value: -totalFees },
         { label: "− Approved expenses", value: -cappedExpenses, note: expenseCapNote },
         { label: "= Net box office", value: netBoxOffice },
-        {
-          label: `× ${(pct * 100).toFixed(0)}% (percentage side)`,
-          value: percentageSide,
-          note: percentageWon ? "Applied — higher of the two" : "Not applied — guarantee is higher",
-        },
-        { label: "Artist base (higher side wins)", value: base },
-        ...bonusResult.steps,
+        { label: `× ${(pct * 100).toFixed(0)}% of net`, value: percentageSide, note: percentageWon ? "Applied — highest option" : "Not applied" },
+        ...walkouts.map((w) => ({
+          label: w.label,
+          value: w.value,
+          note: `${(w.percentage * 100).toFixed(0)}% × ($${grossBoxOffice.toLocaleString()} − $${w.threshold.toLocaleString()})${walkoutWon && w.value === walkoutMax ? " · Applied — highest option" : " · Not applied"}`,
+        })),
+        { label: "= Artist base", value: base },
+        ...regularResult.steps,
       ],
-      finalFormula: `max($${g.toLocaleString()} guarantee, net × ${(pct * 100).toFixed(0)}%) = $${base.toFixed(2)}`,
+      finalFormula: `max($${g.toLocaleString()} guarantee, net × ${(pct * 100).toFixed(0)}%${walkouts.length ? ", walkout" : ""}) = $${base.toFixed(2)}`,
     };
   }
 

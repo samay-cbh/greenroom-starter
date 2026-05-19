@@ -61,6 +61,21 @@ interface CalcInput {
   ticketsSold?: number;
 }
 
+type WalkoutCandidate = { label: string; threshold: number; percentage: number; value: number };
+
+function getWalkoutCandidates(bonuses: Bonus[], gross: number): WalkoutCandidate[] {
+  return bonuses
+    .filter((b): b is Extract<Bonus, { type: "gross_percentage_above_threshold" }> =>
+      b.type === "gross_percentage_above_threshold"
+    )
+    .map((b) => ({
+      label: b.label,
+      threshold: b.threshold,
+      percentage: b.percentage,
+      value: gross > b.threshold ? (gross - b.threshold) * b.percentage : 0,
+    }));
+}
+
 export function parseBonuses(deal: Deal): Bonus[] {
   if (!deal.bonusesJson) return [];
   try {
@@ -228,25 +243,40 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
     const netBoxOffice = grossBoxOffice - totalFees - cappedExpenses;
     const percentageSide = Math.max(0, netBoxOffice) * deal.percentage;
     const guaranteeSide = deal.guaranteeAmount;
-    const baseAmount = Math.max(guaranteeSide, percentageSide);
-    const bonusResult = applyBonuses(parseBonuses(deal), {
+
+    const parsedBonuses = parseBonuses(deal);
+    const walkouts = getWalkoutCandidates(parsedBonuses, grossBoxOffice);
+    const walkoutMax = walkouts.length > 0 ? Math.max(...walkouts.map((w) => w.value)) : 0;
+    const baseAmount = Math.max(guaranteeSide, percentageSide, walkoutMax);
+
+    const guaranteeWon = baseAmount === guaranteeSide && guaranteeSide >= percentageSide && guaranteeSide >= walkoutMax;
+    const percentageWon = percentageSide > guaranteeSide && percentageSide >= walkoutMax;
+    const walkoutWon = walkoutMax > guaranteeSide && walkoutMax > percentageSide;
+
+    const regularBonuses = parsedBonuses.filter((b) => b.type !== "gross_percentage_above_threshold");
+    const bonusResult = applyBonuses(regularBonuses, {
       gross: grossBoxOffice,
       tickets,
       capacity: venueCapacity,
     });
 
-    const percentageWon = percentageSide > guaranteeSide;
+    const expenseCapNote = deal.expenseCap != null && totalExpenses > deal.expenseCap
+      ? `Actual $${totalExpenses.toLocaleString()} → capped at $${deal.expenseCap.toLocaleString()} per deal`
+      : undefined;
+
     const steps: { label: string; value: number; note?: string }[] = [
-      { label: "Flat guarantee", value: guaranteeSide, note: percentageWon ? "Not triggered" : "Applied — higher of the two" },
+      { label: "Flat guarantee", value: guaranteeSide, note: guaranteeWon ? "Applied — highest option" : "Not applied" },
       { label: "Gross box office", value: grossBoxOffice },
       { label: "− Ticketing fees", value: -totalFees },
-      { label: "− Approved expenses", value: -cappedExpenses,
-        note: deal.expenseCap != null && totalExpenses > deal.expenseCap
-          ? `Capped at $${deal.expenseCap.toLocaleString()} (actual $${totalExpenses.toLocaleString()})`
-          : undefined },
+      { label: "− Approved expenses", value: -cappedExpenses, note: expenseCapNote },
       { label: "= Net box office", value: netBoxOffice },
-      { label: `× ${(deal.percentage * 100).toFixed(0)}% (percentage side)`, value: percentageSide, note: percentageWon ? "Applied — higher of the two" : "Not triggered" },
-      { label: "= Artist base (higher side wins)", value: baseAmount },
+      { label: `× ${(deal.percentage * 100).toFixed(0)}% of net`, value: percentageSide, note: percentageWon ? "Applied — highest option" : "Not applied" },
+      ...walkouts.map((w) => ({
+        label: w.label,
+        value: w.value,
+        note: `${(w.percentage * 100).toFixed(0)}% × ($${grossBoxOffice.toLocaleString()} − $${w.threshold.toLocaleString()})${walkoutWon && w.value === walkoutMax ? " · Applied — highest option" : " · Not applied"}`,
+      })),
+      { label: "= Artist base", value: baseAmount },
       ...bonusResult.applied.map((b) => ({ label: b.label, value: b.amount, note: b.reason })),
     ];
 
@@ -257,7 +287,7 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
       totalExpenses: cappedExpenses,
       totalToArtist: baseAmount + bonusResult.totalApplied,
       steps,
-      finalFormula: `max($${guaranteeSide.toLocaleString()} guarantee, net × ${deal.percentage}) = ${baseAmount.toFixed(2)}`,
+      finalFormula: `max($${guaranteeSide.toLocaleString()} guarantee, net × ${deal.percentage}${walkouts.length ? ", walkout" : ""}) = ${baseAmount.toFixed(2)}`,
       bonusesApplied: bonusResult.applied,
       bonusesNotTriggered: bonusResult.notTriggered,
     };
@@ -326,20 +356,7 @@ function applyBonuses(
         });
       }
     } else if (b.type === "gross_percentage_above_threshold") {
-      if (ctx.gross > b.threshold) {
-        const amount = (ctx.gross - b.threshold) * b.percentage;
-        applied.push({
-          label: b.label,
-          amount,
-          reason: `${(b.percentage * 100).toFixed(0)}% × ($${ctx.gross.toLocaleString()} − $${b.threshold.toLocaleString()})`,
-        });
-      } else {
-        notTriggered.push({
-          label: b.label,
-          amount: 0,
-          reason: `Gross $${ctx.gross.toLocaleString()} hasn't cleared $${b.threshold.toLocaleString()} threshold`,
-        });
-      }
+      // Handled as a vs-deal candidate, not an additive bonus — skip here.
     } else if (b.type === "tier_ratchet") {
       notTriggered.push({
         label: b.label,
