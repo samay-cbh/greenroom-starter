@@ -52,6 +52,7 @@ export default async function ShowDetailPage({
     agent,
     agency,
     deal,
+    venue,
     settlement,
     ticketSales,
     expenses,
@@ -326,6 +327,14 @@ export default async function ShowDetailPage({
                         {formatMoneyCompact(grossSoFar - totalFees)}
                       </span>
                     </div>
+                    {venue?.capacity && (
+                      <div className="mt-1.5 text-ink-400">
+                        <span className="font-mono tabular text-ink-700">
+                          {Math.round((totalTickets / venue.capacity) * 100)}%
+                        </span>
+                        {" "}capacity · {totalTickets} / {venue.capacity}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-[12px] text-ink-400 pt-3 border-t border-ink-100/80">
