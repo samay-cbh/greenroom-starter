@@ -33,6 +33,37 @@ interface CalcResult {
   cappedExpenses: number;
 }
 
+function applyBonuses(
+  bonuses: ParsedDealTerms["bonuses"],
+  gross: number,
+): { steps: { label: string; value: number; note?: string }[]; total: number } {
+  const steps: { label: string; value: number; note?: string }[] = [];
+  let total = 0;
+  for (const b of bonuses) {
+    if (b.type === "gross_percentage_above_threshold") {
+      if (gross > b.threshold) {
+        const amount = (gross - b.threshold) * b.percentage;
+        steps.push({
+          label: b.label,
+          value: amount,
+          note: `${(b.percentage * 100).toFixed(0)}% × ($${gross.toLocaleString()} − $${b.threshold.toLocaleString()})`,
+        });
+        total += amount;
+      }
+    } else if (b.type === "gross_threshold") {
+      if (gross >= b.threshold) {
+        steps.push({ label: b.label, value: b.amount, note: `Gross $${gross.toLocaleString()} ≥ $${b.threshold.toLocaleString()}` });
+        total += b.amount;
+      }
+    } else if (b.type === "sellout") {
+      // Sellout requires capacity — skip client-side, shown separately
+    } else if (b.type === "attendance_threshold") {
+      // Attendance requires ticket count — skip client-side
+    }
+  }
+  return { steps, total };
+}
+
 function runCalculation(
   terms: ParsedDealTerms,
   grossBoxOffice: number,
@@ -47,18 +78,23 @@ function runCalculation(
 
   const expenseCapNote =
     terms.expenseCap != null && totalExpenses > terms.expenseCap
-      ? `Capped at $${terms.expenseCap.toLocaleString()} (actual $${totalExpenses.toLocaleString()})`
+      ? `Actual $${totalExpenses.toLocaleString()} → capped at $${terms.expenseCap.toLocaleString()} per deal`
       : undefined;
+
+  const bonusResult = applyBonuses(terms.bonuses, grossBoxOffice);
 
   if (terms.dealType === "flat") {
     const g = terms.guaranteeAmount ?? 0;
     return {
       supported: true,
-      totalToArtist: g,
+      totalToArtist: g + bonusResult.total,
       grossBoxOffice,
       netBoxOffice,
       cappedExpenses,
-      steps: [{ label: "Flat guarantee", value: g, note: "No expense deductions." }],
+      steps: [
+        { label: "Flat guarantee", value: g, note: "No expense deductions." },
+        ...bonusResult.steps,
+      ],
       finalFormula: `flat guarantee = $${g.toLocaleString()}`,
     };
   }
@@ -68,13 +104,14 @@ function runCalculation(
     const payout = grossBoxOffice * pct;
     return {
       supported: true,
-      totalToArtist: payout,
+      totalToArtist: payout + bonusResult.total,
       grossBoxOffice,
       netBoxOffice,
       cappedExpenses,
       steps: [
         { label: "Gross box office", value: grossBoxOffice },
         { label: `× ${(pct * 100).toFixed(0)}%`, value: payout, note: "No expense deductions." },
+        ...bonusResult.steps,
       ],
       finalFormula: `gross × ${(pct * 100).toFixed(0)}% = $${payout.toFixed(2)}`,
     };
@@ -85,7 +122,7 @@ function runCalculation(
     const payout = Math.max(0, netBoxOffice) * pct;
     return {
       supported: true,
-      totalToArtist: payout,
+      totalToArtist: payout + bonusResult.total,
       grossBoxOffice,
       netBoxOffice,
       cappedExpenses,
@@ -95,6 +132,7 @@ function runCalculation(
         { label: "− Approved expenses", value: -cappedExpenses, note: expenseCapNote },
         { label: "= Net box office", value: netBoxOffice },
         { label: `× ${(pct * 100).toFixed(0)}%`, value: payout },
+        ...bonusResult.steps,
       ],
       finalFormula: `(gross − fees − expenses) × ${(pct * 100).toFixed(0)}% = $${payout.toFixed(2)}`,
     };
@@ -105,10 +143,10 @@ function runCalculation(
     const pct = terms.percentage ?? 0;
     const percentageSide = Math.max(0, netBoxOffice) * pct;
     const percentageWon = percentageSide > g;
-    const totalToArtist = Math.max(g, percentageSide);
+    const base = Math.max(g, percentageSide);
     return {
       supported: true,
-      totalToArtist,
+      totalToArtist: base + bonusResult.total,
       grossBoxOffice,
       netBoxOffice,
       cappedExpenses,
@@ -123,9 +161,10 @@ function runCalculation(
           value: percentageSide,
           note: percentageWon ? "Applied — higher of the two" : "Not applied — guarantee is higher",
         },
-        { label: "Artist base (higher side wins)", value: totalToArtist },
+        { label: "Artist base (higher side wins)", value: base },
+        ...bonusResult.steps,
       ],
-      finalFormula: `max($${g.toLocaleString()} guarantee, net × ${(pct * 100).toFixed(0)}%) = $${totalToArtist.toFixed(2)}`,
+      finalFormula: `max($${g.toLocaleString()} guarantee, net × ${(pct * 100).toFixed(0)}%) = $${base.toFixed(2)}`,
     };
   }
 

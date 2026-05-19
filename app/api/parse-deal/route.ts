@@ -15,12 +15,12 @@ export interface ParsedDealTerms {
   percentage: number | null;
   expenseCap: number | null;
   hospitalityCap: number | null;
-  bonuses: {
-    type: "gross_threshold" | "sellout" | "attendance_threshold";
-    label: string;
-    threshold?: number;
-    amount: number;
-  }[];
+  bonuses: (
+    | { type: "gross_threshold"; label: string; threshold: number; amount: number }
+    | { type: "sellout"; label: string; amount: number }
+    | { type: "attendance_threshold"; label: string; threshold: number; amount: number }
+    | { type: "gross_percentage_above_threshold"; label: string; threshold: number; percentage: number }
+  )[];
   recoups: {
     category: string;
     amount: number;
@@ -44,7 +44,7 @@ Rules:
 - guaranteeAmount: always in dollars, null if not present
 - expenseCap: the maximum expenses the artist is responsible for, null if uncapped or not mentioned
 - hospitalityCap: cap specifically on hospitality/catering spend, null if not mentioned
-- bonuses: only include bonuses explicitly mentioned in the notes
+- bonuses: only include bonuses explicitly mentioned in the notes. Use "gross_percentage_above_threshold" (with a percentage field, e.g. 1.0 for 100%) when the deal says things like "walkout pot", "100% of gross above $X", or "artist gets all dollars above $X". Use "gross_threshold" only for flat dollar bonuses triggered when gross clears a threshold.
 - recoups: deductions the venue takes off the top (marketing, prior advance, etc.) — include only if mentioned
 - confidence: "high" if the terms are unambiguous, "medium" if you had to interpret something, "low" if the notes are vague or contradictory
 - aiNotes: a 1-3 sentence plain-English summary of what you found, flagging any ambiguities the booker should verify
@@ -87,7 +87,12 @@ Return the extracted terms as JSON matching this exact schema:
   "percentage": number | null,
   "expenseCap": number | null,
   "hospitalityCap": number | null,
-  "bonuses": [{ "type": "gross_threshold" | "sellout" | "attendance_threshold", "label": string, "threshold": number (optional), "amount": number }],
+  "bonuses": [
+    { "type": "gross_threshold", "label": string, "threshold": number, "amount": number } |
+    { "type": "sellout", "label": string, "amount": number } |
+    { "type": "attendance_threshold", "label": string, "threshold": number, "amount": number } |
+    { "type": "gross_percentage_above_threshold", "label": string, "threshold": number, "percentage": number }
+  ],
   "recoups": [{ "category": string, "amount": number, "description": string }],
   "confidence": "high" | "medium" | "low",
   "aiNotes": string

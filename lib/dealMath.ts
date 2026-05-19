@@ -325,11 +325,22 @@ function applyBonuses(
           reason: `${ctx.tickets} < ${b.threshold}`,
         });
       }
+    } else if (b.type === "gross_percentage_above_threshold") {
+      if (ctx.gross > b.threshold) {
+        const amount = (ctx.gross - b.threshold) * b.percentage;
+        applied.push({
+          label: b.label,
+          amount,
+          reason: `${(b.percentage * 100).toFixed(0)}% × ($${ctx.gross.toLocaleString()} − $${b.threshold.toLocaleString()})`,
+        });
+      } else {
+        notTriggered.push({
+          label: b.label,
+          amount: 0,
+          reason: `Gross $${ctx.gross.toLocaleString()} hasn't cleared $${b.threshold.toLocaleString()} threshold`,
+        });
+      }
     } else if (b.type === "tier_ratchet") {
-      // Tier ratchets fundamentally change the percentage structure. The
-      // current engine only supports flat % of gross — we can't apply a
-      // ratcheting structure on top of it without knowing which deal type
-      // it's modifying. Report as not-applicable.
       notTriggered.push({
         label: b.label,
         amount: 0,

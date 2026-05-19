@@ -316,6 +316,12 @@ export type Bonus =
       type: "tier_ratchet";
       label: string;
       tiers: { from: number; to: number | null; percentage: number }[];
+    }
+  | {
+      type: "gross_percentage_above_threshold";
+      label: string;
+      threshold: number;
+      percentage: number;
     };
 
 export type Recoup = {
