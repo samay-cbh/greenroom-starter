@@ -6,12 +6,32 @@ Notes for the reviewer. The PRD is in `prd.md`. The README is unchanged from the
 
 The slice described in PRD §7: **F0 (AI Deal Term Parser) → F1 (vs Deal Engine) → F2 (Auditable Statement)**, as a prototype against the existing starter codebase. Extension work, not greenfield — `dealMath.ts`, the settle page, and `settlements.calculation_json` were already there; the work is wiring them end-to-end for vs deals.
 
+The **final submission pass** widened F0's input surface (any vs show, not just Coastal-shaped emails) and upgraded F2's worksheet transparency (running balance, cap-status badges, explicit cap-bucket row) — see "Final submission pass: Phase A + Transparency" below.
+
 | PRD feature | Where it lives | Status |
 |---|---|---|
-| F0 — Deterministic parser + forced-choice confirmation | `lib/dealParser.ts`, `app/shows/[id]/confirm-terms/` | Regex stub, **not** an LLM. Production swaps the regex body for a model call; the `ParsedDealTerms` contract stays. |
-| F1 — vs deal engine | `lib/dealMath.ts` (vs branch) | Full formula, including a `deductions[]` loop sorted by `ordering_priority` (marketing-recoup `cap_scope` toggle) and bonus tiers. Flat and % of gross paths untouched. |
-| F2 — Auditable statement | `app/shows/[id]/settle/page.tsx` (`AuditableWorksheet`) | Per-line source badges, separate absorbed section, explicit guarantee comparison row, counterfactual block, cap-binding note. |
-| Shared contract | `lib/dealTerms.ts` | **Deal Terms Schema v1** in `dealTermsJson` (`deal_terms_version: "deal_terms_v1"`). Discriminator-keyed migration for any pre-v1 JSON. F0 = deterministic parser (no LLM). Downstream binds to `DealTermsV1` → `CalculationRecord` (v1). |
+| F0 — Deterministic parser + forced-choice confirmation | `lib/dealParser.ts`, `app/shows/[id]/confirm-terms/` | Regex stub, **not** an LLM. Production swaps the regex body for a model call; the `ParsedDealTerms` contract stays. `mergeDealRecordFallbacks(parsed, deal)` fills in fields when the prose didn't (guarantee, %, cap, gross-threshold bonus rows from `bonusesJson`). Confirm form loops generically over `parsed.ambiguities` and builds `deductions[]` from `parsed.extracted.deductions` + per-id resolutions. |
+| F1 — vs deal engine | `lib/dealMath.ts` (vs branch) | Full formula, including a `deductions[]` loop sorted by `ordering_priority` (marketing-recoup `cap_scope` toggle) and bonus tiers. Now emits `runningBalance` + `capStatus` on each worksheet step; in-cap bucket subtotal precedes the cap; cap row always emitted (even when savings = 0). Flat and % of gross paths untouched. |
+| F2 — Auditable statement | `app/shows/[id]/settle/page.tsx` (`AuditableWorksheet`) | Per-line source badges, **per-line cap-status badges**, **running balance under every amount**, separate absorbed section, explicit guarantee comparison row, counterfactual block, cap-binding note. |
+| Shared contract | `lib/dealTerms.ts` | **Deal Terms Schema v1** in `dealTermsJson` (`deal_terms_version: "deal_terms_v1"`). Discriminator-keyed migration for any pre-v1 JSON. `Ambiguity` is generic — `field: string`, options with `string` values — so new ambiguity types ride the same form. `CalculationRecord.steps[]` carries optional `runningBalance` + `capStatus` (`pre_cap` / `in_cap` / `absorbed` / `cap_binding` / `cap_at` / `cap_within`). F0 = deterministic parser (no LLM). Downstream binds to `DealTermsV1` → `CalculationRecord` (v1). |
+
+## Final submission pass: Phase A + Transparency
+
+**Goal of this pass:** make the existing pipeline cover any vs show in the DB (not only Coastal-shaped emails) and make every worksheet line traceable end-to-end — without throwing away the schema or golden tests, and without expanding the engine into Phase B (net-basis lines, bonusesJson merge).
+
+**Phase A — any vs show settles**
+
+- `Ambiguity.field` widened from a Coastal-only literal to `string`; `options[].value` widened to `string`. `confidence` keys widened to open-ended dotted paths. Existing parser output unchanged at runtime — the field path `deductions.marketing_recoup.cap_scope` was always the shape; the type just narrowed it.
+- Confirm form (`confirm-form.tsx`) now uses a generic `parsed.ambiguities.map(...)` loop and a per-id `deductionAmounts` state map. On submit it builds `deductions[]` from `parsed.extracted.deductions`, applying user-edited amounts + resolutions. Hidden-when-zero: an ambiguity is treated as moot if the user zeroes out its deduction.
+- `mergeDealRecordFallbacks(parsed, deal)` (new helper in `dealParser.ts`) fills `extracted` fields from the deal record whenever the parser missed: `guaranteeAmount`, `percentage`, `expenseCap`, and `gross_threshold` rows from `bonusesJson` → `bonus_tiers`. Sellout / attendance / tier_ratchet bonuses are intentionally left for Phase B since the engine doesn't read them on the vs path yet.
+
+**Transparency #8–#10 (from the PRD-aligned punch list)**
+
+- **#8 — Running balance.** Each deduction-phase worksheet row carries the live balance after applying it (`step.runningBalance`). Snapshot rows after the deduction phase (Net, artist share, guarantee comparison, bonuses) intentionally leave it undefined — they aren't deltas.
+- **#9 — Cap-status badges.** Each row carries `capStatus`: `pre_cap` (off-gross deduction), `in_cap` (non-absorbed expense or inside-cap deduction), `absorbed` (venue ate it), `cap_binding` (cap row when bucket > cap, savings > 0), `cap_at` (cap row when bucket equals cap exactly — Coastal's case), or `cap_within` (cap row when bucket < cap). UI surfaces it as a small uppercase badge next to the source label.
+- **#10 — Explicit in-cap bucket row + always-on cap row.** When a cap exists, the engine emits an "In-cap bucket subtotal" informational row (`expenses $X + in-cap deductions $Y = $Z`) immediately before the cap row, and the cap row is always emitted (even at savings = 0) so the cap operation is never invisible. This is the row that resolves the "wait, did the cap do anything?" question on boundary cases.
+
+**Explicitly NOT in this pass (Phase B kept out):** engine extensions for net-basis deductions, net-basis bonus tiers, merging non-gross-threshold rows from `bonusesJson` into the vs path. Those touch the math, would need new fixtures, and have a real regression surface. Sequenced for a subsequent pass.
 
 ## Demo path
 
@@ -100,23 +120,39 @@ Per PRD §5 (Not Goals) and §9 (Ship Later), and to keep the prototype scope ti
 npm test
 ```
 
-Runs three golden tests via node's built-in test runner (no new dependencies):
+Runs **18 tests** via node's built-in test runner (no new dependencies):
+
+**Engine goldens (`lib/__tests__/dealMath.test.ts` — 12 tests)**
 
 1. Coastal Spell, recoup OUTSIDE cap → $11,564.80
 2. Coastal Spell, recoup INSIDE cap → $12,284.80 ($720 delta vs test 1, asserted)
 3. Flat deal regression — proves the existing flat path is byte-identical to pre-F1 behaviour
+4. Uncapped vs with two pre-cap deductions → engine handles non-Coastal vs shows
+5. Cap binds (in-cap recoup, bucket > cap) → exercises the `cap_binding` path
+6. vs deal without confirmed terms → `confirm_terms` blocker
+7. Net-basis deduction → `terms_not_supported` blocker (fail loud)
+8. Running balance is set on every deduction-phase step, ending at netBoxOffice
+9. Coastal Spell worksheet emits cap rows even when savings = 0 (`cap_at`)
+10. `cap_binding` capStatus surfaces when bucket > cap
+11. `pre_cap` and `in_cap` capStatuses are tagged on deduction rows
+12. Uncapped vs deductions stay `pre_cap` and skip the bucket/cap rows
+
+**Parser contract (`lib/__tests__/dealParser.test.ts` — 4 tests)** — Coastal-style email emits a forced-choice cap_scope ambiguity with generic field path + string options; unspecified recoup still forces a choice; no-recoup email emits zero ambiguities; bonus tiers parse onto `extracted.bonus_tiers`.
+
+**Blocker mapping (`lib/__tests__/settlementBlocker.test.ts` — 2 tests)** — stale JSON → `terms_invalid`; confirm CTA wiring.
 
 ## Files changed at a glance
 
 | Path | Why |
 |---|---|
-| `lib/dealTerms.ts` (new) | Shared contract: **Deal Terms Schema v1** (`DealTermsV1`), `ParsedDealTerms`, `CalculationRecord`, plus helpers (`parseDealTermsJson`, `migrateLegacyTerms`, `getMarketingRecoup`, `flipRecoupCapScope`, `recoupInterpretationsCollapse`). `ConfirmedDealTerms` kept as deprecated alias. |
-| `lib/dealMath.ts` | New vs branch + `calculateVsDeal()` reads `deductions[]` sorted by `ordering_priority`, fails loud on net-basis deductions. Flat / % of gross unchanged. |
-| `lib/dealParser.ts` (new) | F0 deterministic stub. Emits schema-shaped `extracted` (`guarantee_amount`, `artist_percent`, `expense_cap`, `deductions[]`, `bonus_tiers[]`) and `deductions.marketing_recoup.cap_scope` ambiguity. |
-| `lib/__tests__/dealMath.test.ts` (new) | 3 golden tests; fixtures are full v1 records; asserts `deal_terms_version` on the snapshot. |
-| `app/shows/[id]/settle/page.tsx` | Read `dealTermsJson`, run engine, persist `calculation_json`, render `AuditableWorksheet` + counterfactual (via `flipRecoupCapScope`) + cap-binding note. |
-| `app/shows/[id]/confirm-terms/page.tsx` (new) | Server component: parses email server-side, shows already-confirmed status view, "Parser-extracted draft" badge. |
-| `app/shows/[id]/confirm-terms/confirm-form.tsx` (new) | Client component: builds `DealTermsV1` on submit; forced-choice radios for `cap_scope`. |
+| `lib/dealTerms.ts` (new) | Shared contract: **Deal Terms Schema v1** (`DealTermsV1`), `ParsedDealTerms`, `CalculationRecord` (with optional `runningBalance` + `capStatus` per step), `CapStatus`, plus helpers (`parseDealTermsJson`, `migrateLegacyTerms`, `getMarketingRecoup`, `flipRecoupCapScope`, `recoupInterpretationsCollapse`). `Ambiguity` widened to generic (`field: string`, options with `string` values). `ConfirmedDealTerms` kept as deprecated alias. |
+| `lib/dealMath.ts` | New vs branch + `calculateVsDeal()` reads `deductions[]` sorted by `ordering_priority`, fails loud on net-basis deductions. Emits running balance through the deduction phase, per-row capStatus, in-cap bucket subtotal, always-on cap row. Flat / % of gross unchanged. |
+| `lib/dealParser.ts` (new) | F0 deterministic stub. Emits schema-shaped `extracted` (`guarantee_amount`, `artist_percent`, `expense_cap`, `deductions[]`, `bonus_tiers[]`) and `deductions.marketing_recoup.cap_scope` ambiguity. **`mergeDealRecordFallbacks(parsed, deal)`** fills missing extracted fields from the deal record (numbers, %, cap, gross-threshold bonus rows from `bonusesJson`) so any vs show can be confirmed. |
+| `lib/__tests__/dealMath.test.ts` (extended) | 12 tests now: 5 engine fixtures (Coastal goldens + uncapped multi-deduction + cap-binds) and 5 transparency-shape tests asserting runningBalance + capStatus + cap-row emission. Asserts `deal_terms_version` on the snapshot. |
+| `lib/__tests__/dealParser.test.ts` (new) | 4 parser-contract tests: ambiguity emission, generic field path, unspecified-recoup branch, bonus tier extraction. |
+| `app/shows/[id]/settle/page.tsx` | Read `dealTermsJson`, run engine, persist `calculation_json`, render `AuditableWorksheet` + counterfactual (via `flipRecoupCapScope`) + cap-binding note. Each row now shows `runningBalance` under the amount and a `CapStatusBadge`. |
+| `app/shows/[id]/confirm-terms/page.tsx` (new) | Server component: parses email server-side, applies `mergeDealRecordFallbacks` so the form lights up from the deal row when prose is silent, shows already-confirmed status view, "Parser-extracted draft" badge. |
+| `app/shows/[id]/confirm-terms/confirm-form.tsx` (new) | Client component: generic `parsed.ambiguities.map(...)` loop, per-id `deductionAmounts` state, builds `DealTermsV1.deductions[]` on submit from parser + resolutions. |
 | `app/shows/[id]/confirm-terms/actions.ts` (new) | Server action: validates `deal_terms_version`, each deduction's `basis` + `cap_scope`. Writes `dealTermsJson`. |
 | `db/schema.ts` | One new column: `deals.deal_terms_json` (stores `DealTermsV1` JSON). Comment-only change to point to the v1 type. |
 | `package.json` | One new script: `"test"` (and `db:reset` cross-platform helper). |

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { getShowById } from "@/lib/queries";
-import { parseDealEmail } from "@/lib/dealParser";
+import { mergeDealRecordFallbacks, parseDealEmail } from "@/lib/dealParser";
 import { getMarketingRecoup, parseDealTermsJson } from "@/lib/dealTerms";
 import {
   Card,
@@ -181,7 +181,12 @@ export default async function ConfirmTermsPage({
   }
 
   // ----- Fresh (or re-)confirmation flow. Parse server-side. -----
-  const parsed = parseDealEmail(sourceText);
+  // why: the email parser only sees what's in the prose. When the booker
+  // stored numbers on the deal row (guaranteeAmount, percentage, expenseCap,
+  // bonusesJson) but the email phrasing didn't trip the regex, fall back to
+  // the deal record so the form lights up with sensible defaults instead
+  // of forcing manual re-entry.
+  const parsed = mergeDealRecordFallbacks(parseDealEmail(sourceText), deal);
 
   return (
     <div className="px-12 py-10 max-w-4xl">

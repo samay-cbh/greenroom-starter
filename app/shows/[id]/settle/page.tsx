@@ -42,6 +42,7 @@ import {
   parseDealTermsJson,
   recoupInterpretationsCollapse,
   type CalculationRecord,
+  type CapStatus,
   type LineSource,
 } from "@/lib/dealTerms";
 import { db } from "@/db";
@@ -452,7 +453,7 @@ function SettlementBlocked({
   expenseRowCount,
 }: {
   calc: Extract<ReturnType<typeof calculateSettlement>, { supported: false }>;
-  deal: NonNullable<Awaited<ReturnType<typeof getShowById>>>["deal"];
+  deal: NonNullable<NonNullable<Awaited<ReturnType<typeof getShowById>>>["deal"]>;
   termsParseFailed: boolean;
   existingSettlement: NonNullable<
     Awaited<ReturnType<typeof getShowById>>
@@ -1026,6 +1027,7 @@ function AuditableRow({
             {step.label}
           </span>
           {step.source !== "computed" && <SourceBadge source={step.source} />}
+          {step.capStatus && <CapStatusBadge status={step.capStatus} />}
         </div>
         {step.note && (
           <div className="text-[11.5px] text-ink-400 mt-0.5 max-w-md leading-snug">
@@ -1033,12 +1035,60 @@ function AuditableRow({
           </div>
         )}
       </div>
-      <div className="text-[13.5px] text-ink-900 font-mono tabular text-right">
-        {step.amount < 0
-          ? `− ${formatMoney(-step.amount)}`
-          : formatMoney(step.amount)}
+      <div className="text-right">
+        <div className="text-[13.5px] text-ink-900 font-mono tabular">
+          {step.amount < 0
+            ? `− ${formatMoney(-step.amount)}`
+            : formatMoney(step.amount)}
+        </div>
+        {step.runningBalance != null && (
+          <div className="text-[10.5px] text-ink-400 font-mono tabular mt-0.5">
+            = {formatMoney(step.runningBalance)}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+const CAP_STATUS_BADGE: Record<
+  CapStatus,
+  { label: string; classes: string }
+> = {
+  pre_cap: {
+    label: "pre-cap",
+    classes: "bg-ink-50 text-ink-600 ring-ink-200/80",
+  },
+  in_cap: {
+    label: "in cap",
+    classes: "bg-ink-50 text-ink-600 ring-ink-200/80",
+  },
+  absorbed: {
+    label: "absorbed",
+    classes: "bg-ink-50 text-ink-500 ring-ink-200/60",
+  },
+  cap_binding: {
+    label: "cap binds",
+    classes: "bg-amber-50 text-amber-800 ring-amber-200/80",
+  },
+  cap_at: {
+    label: "at cap",
+    classes: "bg-amber-50 text-amber-800 ring-amber-200/80",
+  },
+  cap_within: {
+    label: "within cap",
+    classes: "bg-ink-50 text-ink-600 ring-ink-200/80",
+  },
+};
+
+function CapStatusBadge({ status }: { status: CapStatus }) {
+  const s = CAP_STATUS_BADGE[status];
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-px rounded text-[9.5px] font-medium ring-1 ring-inset tracking-wide uppercase ${s.classes}`}
+    >
+      {s.label}
+    </span>
   );
 }
 

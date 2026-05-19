@@ -15,19 +15,11 @@ import { cn } from "@/lib/utils";
 import {
   DEAL_TERMS_VERSION,
   type CapScope,
+  type DealTermsDeduction,
   type DealTermsV1,
   type ParsedDealTerms,
 } from "@/lib/dealTerms";
 import { confirmDealTerms } from "./actions";
-
-const MARKETING_RECOUP_ID = "marketing_recoup";
-const MARKETING_RECOUP_LABEL = "Marketing Recoup";
-const MARKETING_RECOUP_ORDERING_PRIORITY = 10;
-// why: stable id duplicated across the parser (`Ambiguity.field` in
-// lib/dealParser.ts) and the form (the resolutions[] map key). Renaming
-// one without the other silently breaks the forced-choice wiring — the
-// ambiguity card would render but submission would never accept it.
-const RECOUP_AMBIGUITY_FIELD = "deductions.marketing_recoup.cap_scope" as const;
 
 type Props = {
   showId: string;
@@ -40,9 +32,7 @@ export function ConfirmForm({ showId, sourceText, parsed }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const parsedRecoup = parsed.extracted.deductions?.find(
-    (d) => d.id === MARKETING_RECOUP_ID,
-  );
+  const parsedDeductions = parsed.extracted.deductions ?? [];
 
   // Form state. Strings so we can show empty inputs cleanly; parse on submit.
   const [guarantee, setGuarantee] = useState(
@@ -61,15 +51,26 @@ export function ConfirmForm({ showId, sourceText, parsed }: Props) {
       ? String(parsed.extracted.expense_cap.cap_amount)
       : "",
   );
-  const [recoupAmount, setRecoupAmount] = useState(
-    parsedRecoup?.amount != null ? String(parsedRecoup.amount) : "",
-  );
+  // Per-deduction amount state, keyed by stable id. One input per parsed
+  // deduction row — keeps the UI generic for future deduction types
+  // without an `if (id === "marketing_recoup")` branch.
+  const [deductionAmounts, setDeductionAmounts] = useState<
+    Record<string, string>
+  >(() => {
+    const init: Record<string, string> = {};
+    for (const d of parsedDeductions) init[d.id] = String(d.amount);
+    return init;
+  });
 
   // Ambiguity resolutions, keyed by ambiguity field path.
   const [resolutions, setResolutions] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
-    if (parsedRecoup?.cap_scope) {
-      initial[RECOUP_AMBIGUITY_FIELD] = parsedRecoup.cap_scope;
+    // Pre-resolve any cap_scope already determined by the parser (e.g. an
+    // unambiguous "included in cap" phrase).
+    for (const d of parsedDeductions) {
+      if (d.cap_scope) {
+        initial[`deductions.${d.id}.cap_scope`] = d.cap_scope;
+      }
     }
     return initial;
   });
@@ -77,15 +78,33 @@ export function ConfirmForm({ showId, sourceText, parsed }: Props) {
   const guaranteeNum = parseFloat(guarantee);
   const percentageNum = parseFloat(percentage);
   const expenseCapNum = expenseCap.trim() === "" ? null : parseFloat(expenseCap);
-  const recoupAmountNum = recoupAmount.trim() === "" ? 0 : parseFloat(recoupAmount);
-  const hasRecoup = !isNaN(recoupAmountNum) && recoupAmountNum > 0;
 
-  const recoupAmbiguity = parsed.ambiguities.find(
-    (a) => a.field === RECOUP_AMBIGUITY_FIELD,
-  );
-  const recoupCapScopeResolved =
-    resolutions[RECOUP_AMBIGUITY_FIELD] === "outside_cap" ||
-    resolutions[RECOUP_AMBIGUITY_FIELD] === "inside_cap";
+  // Helper: is this ambiguity still in play given the form state? A
+  // deductions.{id}.cap_scope ambiguity becomes moot when the user zeros
+  // out that deduction's amount.
+  function isAmbiguityActive(field: string): boolean {
+    const m = field.match(/^deductions\.(.+)\.cap_scope$/);
+    if (m) {
+      const id = m[1];
+      const raw = deductionAmounts[id];
+      const amt = raw == null || raw.trim() === "" ? 0 : parseFloat(raw);
+      return !isNaN(amt) && amt > 0;
+    }
+    return true;
+  }
+
+  const allAmbiguitiesResolved = parsed.ambiguities.every((amb) => {
+    if (!isAmbiguityActive(amb.field)) return true;
+    const v = resolutions[amb.field];
+    return v != null && v !== "";
+  });
+
+  const allDeductionAmountsValid = parsedDeductions.every((d) => {
+    const raw = deductionAmounts[d.id];
+    if (raw == null || raw.trim() === "") return true; // 0 / empty is allowed
+    const n = parseFloat(raw);
+    return !isNaN(n) && n >= 0;
+  });
 
   const isValid =
     !isNaN(guaranteeNum) &&
@@ -94,11 +113,33 @@ export function ConfirmForm({ showId, sourceText, parsed }: Props) {
     percentageNum > 0 &&
     percentageNum <= 100 &&
     (expenseCapNum === null || (!isNaN(expenseCapNum) && expenseCapNum >= 0)) &&
-    (!hasRecoup || recoupCapScopeResolved);
+    allDeductionAmountsValid &&
+    allAmbiguitiesResolved;
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    // Build the deductions array from the parser-extracted set, applying
+    // user-edited amounts and forced-choice resolutions. Drop any deduction
+    // the user zeroed out — same end result as never adding it.
+    const deductions: DealTermsDeduction[] = [];
+    for (const d of parsedDeductions) {
+      const raw = deductionAmounts[d.id];
+      const amt = raw == null || raw.trim() === "" ? 0 : parseFloat(raw);
+      if (!isFinite(amt) || amt <= 0) continue;
+      const scope =
+        resolutions[`deductions.${d.id}.cap_scope`] ?? d.cap_scope ?? null;
+      if (scope !== "outside_cap" && scope !== "inside_cap") continue;
+      deductions.push({
+        id: d.id,
+        label: d.label,
+        amount: amt,
+        basis: d.basis,
+        cap_scope: scope as CapScope,
+        ordering_priority: d.ordering_priority,
+      });
+    }
 
     const terms: DealTermsV1 = {
       deal_terms_version: DEAL_TERMS_VERSION,
@@ -109,22 +150,10 @@ export function ConfirmForm({ showId, sourceText, parsed }: Props) {
         exists: expenseCapNum !== null,
         cap_amount: expenseCapNum,
       },
-      deductions: hasRecoup
-        ? [
-            {
-              id: MARKETING_RECOUP_ID,
-              label: MARKETING_RECOUP_LABEL,
-              amount: recoupAmountNum,
-              basis: "gross",
-              cap_scope: resolutions[RECOUP_AMBIGUITY_FIELD] as CapScope,
-              ordering_priority: MARKETING_RECOUP_ORDERING_PRIORITY,
-            },
-          ]
-        : [],
+      deductions,
       // why: v1 doesn't surface tier editing in the form — bonus tiers
-      // come straight from the parser. F3 (PRD §8) will give bookers a
-      // structured editor for these. Passing through preserves whatever
-      // the parser extracted (label, threshold, basis, flat_amount).
+      // come straight from the parser (or merged from deal.bonusesJson).
+      // F3 (PRD §8) will give bookers a structured editor for these.
       bonus_tiers: parsed.extracted.bonus_tiers ?? [],
       source_text: sourceText,
       confirmed_at: new Date().toISOString(),
@@ -173,7 +202,8 @@ export function ConfirmForm({ showId, sourceText, parsed }: Props) {
               Parsed deal terms
             </CardTitle>
             <CardDescription>
-              Extracted from the deal email by the deterministic parser.
+              Extracted from the deal email by the deterministic parser, with
+              deal-record fields filled in where the prose didn&apos;t.
               Override anything that&apos;s wrong; fill in anything that&apos;s
               missing.
             </CardDescription>
@@ -231,25 +261,27 @@ export function ConfirmForm({ showId, sourceText, parsed }: Props) {
             />
           </FieldRow>
 
-          <FieldRow
-            label="Marketing recoup"
-            confidence={parsed.confidence["deductions.marketing_recoup.cap_scope"]}
-            extractedHint={
-              parsedRecoup
-                ? `Extracted: $${parsedRecoup.amount.toLocaleString()}${
-                    parsedRecoup.cap_scope
-                      ? " (cap scope resolved)"
-                      : " (cap scope needs a decision below)"
-                  }`
-                : "Leave blank if there is no recoup"
-            }
-          >
-            <MoneyInput
-              value={recoupAmount}
-              onChange={setRecoupAmount}
-              placeholder="Leave blank if none"
-            />
-          </FieldRow>
+          {parsedDeductions.map((d) => (
+            <FieldRow
+              key={d.id}
+              label={d.label}
+              confidence={parsed.confidence[`deductions.${d.id}.cap_scope`]}
+              extractedHint={
+                `Extracted: $${d.amount.toLocaleString()}` +
+                (d.cap_scope
+                  ? " (cap scope resolved)"
+                  : " (cap scope needs a decision below)")
+              }
+            >
+              <MoneyInput
+                value={deductionAmounts[d.id] ?? ""}
+                onChange={(v) =>
+                  setDeductionAmounts((prev) => ({ ...prev, [d.id]: v }))
+                }
+                placeholder="0"
+              />
+            </FieldRow>
+          ))}
 
           {parsed.extracted.bonus_tiers && parsed.extracted.bonus_tiers.length > 0 && (
             <div className="py-4">
@@ -272,74 +304,21 @@ export function ConfirmForm({ showId, sourceText, parsed }: Props) {
         </CardContent>
       </Card>
 
-      {/* Ambiguities — forced choice */}
-      {hasRecoup && recoupAmbiguity && (
-        <Card accent="amber">
-          <CardHeader>
-            <div>
-              <CardTitle className="flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />
-                Needs your decision
-              </CardTitle>
-              <CardDescription>
-                One phrase in the deal email can be read more than one way.
-                Pick the reading that matches what was negotiated — this is
-                the choice that resolves the Coastal Spell-type dispute at
-                deal entry, not settlement.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="eyebrow text-[10px] text-ink-500 mb-2">
-              Source phrase
-            </div>
-            <blockquote className="text-[12.5px] text-ink-800 bg-canvas-soft rounded-lg p-4 ring-1 ring-ink-200/60 leading-relaxed italic mb-5">
-              &ldquo;{recoupAmbiguity.sourcePhrase}&rdquo;
-            </blockquote>
-
-            <div className="space-y-3">
-              {recoupAmbiguity.options.map((opt) => {
-                const selected = resolutions[RECOUP_AMBIGUITY_FIELD] === opt.value;
-                return (
-                  <label
-                    key={opt.value}
-                    className={cn(
-                      "block rounded-lg border p-4 cursor-pointer transition-colors",
-                      selected
-                        ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500/30"
-                        : "border-ink-200/80 bg-white hover:border-ink-300",
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="radio"
-                        name={RECOUP_AMBIGUITY_FIELD}
-                        value={opt.value}
-                        checked={selected}
-                        onChange={() =>
-                          setResolutions((r) => ({
-                            ...r,
-                            [RECOUP_AMBIGUITY_FIELD]: opt.value,
-                          }))
-                        }
-                        className="mt-0.5 h-4 w-4 accent-brand-700"
-                      />
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-medium text-ink-900 leading-snug">
-                          {opt.label}
-                        </div>
-                        <div className="text-[12px] text-ink-500 mt-1 leading-relaxed">
-                          {opt.rationale}
-                        </div>
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Ambiguities — forced choice. Loop generically: each Ambiguity
+          carries its own field path + options, so new ambiguity types ride
+          this card without code changes here. */}
+      {parsed.ambiguities
+        .filter((a) => isAmbiguityActive(a.field))
+        .map((amb) => (
+          <AmbiguityCard
+            key={amb.field}
+            ambiguity={amb}
+            selected={resolutions[amb.field]}
+            onSelect={(value) =>
+              setResolutions((r) => ({ ...r, [amb.field]: value }))
+            }
+          />
+        ))}
 
       {/* Submit */}
       <div className="flex items-center justify-between gap-4 pt-2">
@@ -377,6 +356,79 @@ export function ConfirmForm({ showId, sourceText, parsed }: Props) {
 }
 
 // ----- Sub-components -----
+
+function AmbiguityCard({
+  ambiguity,
+  selected,
+  onSelect,
+}: {
+  ambiguity: ParsedDealTerms["ambiguities"][number];
+  selected: string | undefined;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <Card accent="amber">
+      <CardHeader>
+        <div>
+          <CardTitle className="flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />
+            Needs your decision
+          </CardTitle>
+          <CardDescription>
+            One phrase in the deal email can be read more than one way. Pick
+            the reading that matches what was negotiated — this is the choice
+            that resolves the Coastal Spell-type dispute at deal entry, not
+            settlement.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="eyebrow text-[10px] text-ink-500 mb-2">
+          Source phrase
+        </div>
+        <blockquote className="text-[12.5px] text-ink-800 bg-canvas-soft rounded-lg p-4 ring-1 ring-ink-200/60 leading-relaxed italic mb-5">
+          &ldquo;{ambiguity.sourcePhrase}&rdquo;
+        </blockquote>
+
+        <div className="space-y-3">
+          {ambiguity.options.map((opt) => {
+            const isSelected = selected === opt.value;
+            return (
+              <label
+                key={opt.value}
+                className={cn(
+                  "block rounded-lg border p-4 cursor-pointer transition-colors",
+                  isSelected
+                    ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500/30"
+                    : "border-ink-200/80 bg-white hover:border-ink-300",
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name={ambiguity.field}
+                    value={opt.value}
+                    checked={isSelected}
+                    onChange={() => onSelect(opt.value)}
+                    className="mt-0.5 h-4 w-4 accent-brand-700"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-medium text-ink-900 leading-snug">
+                      {opt.label}
+                    </div>
+                    <div className="text-[12px] text-ink-500 mt-1 leading-relaxed">
+                      {opt.rationale}
+                    </div>
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function FieldRow({
   label,

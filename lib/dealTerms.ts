@@ -158,24 +158,31 @@ export type ParsedDealTerms = {
   };
   /** Fields the parser is unsure about — user must resolve before saving. */
   ambiguities: Ambiguity[];
-  /** Per-field confidence. UI flags low-confidence fields for review. */
-  confidence: Partial<
-    Record<
-      | "guarantee_amount"
-      | "artist_percent"
-      | "expense_cap"
-      | "deductions.marketing_recoup.cap_scope",
-      "high" | "medium" | "low"
-    >
-  >;
+  /**
+   * Per-field confidence. Keys are dotted paths into the extracted shape
+   * (e.g. `guarantee_amount`, `deductions.{id}.cap_scope`). Open-ended so
+   * new parser heuristics can flag confidence without a schema change.
+   */
+  confidence: Partial<Record<string, "high" | "medium" | "low">>;
 };
 
+/**
+ * A phrase the parser cannot resolve on its own. The form loops over the
+ * `ambiguities[]` and renders one forced-choice card per entry; the user's
+ * pick is keyed back by `field` in the resolutions map.
+ *
+ * Generic `string` field and option values let new ambiguity types ride
+ * the same UI without engine or schema changes — only the resolution-
+ * interpretation step in the form has to understand the field semantics.
+ * v1 emits `deductions.{id}.cap_scope` with `inside_cap` / `outside_cap`
+ * option values.
+ */
 export type Ambiguity = {
-  /** Stable dotted path. v1 only models marketing-recoup cap scope. */
-  field: "deductions.marketing_recoup.cap_scope";
+  /** Stable dotted path. Example: `deductions.marketing_recoup.cap_scope`. */
+  field: string;
   sourcePhrase: string;
   options: Array<{
-    value: CapScope;
+    value: string;
     label: string;
     rationale: string;
   }>;
@@ -190,6 +197,27 @@ export type LineSource =
   | "manual"
   | "computed"
   | "absorbed";
+
+/**
+ * Where a worksheet line sits relative to the expense cap. Drives the
+ * cap-status badge in the F2 worksheet so a reader can see, line by line,
+ * which items the cap is operating on.
+ *
+ *  - `pre_cap`: outside-cap deduction subtracted off gross before the cap.
+ *  - `in_cap`: non-absorbed expense / inside-cap deduction; contributes
+ *    to the bucket the cap limits.
+ *  - `absorbed`: venue ate it; appears in the worksheet but does not deduct.
+ *  - `cap_binding`: cap row when bucket > cap (savings > 0).
+ *  - `cap_at`: cap row when bucket == cap exactly (boundary; savings == 0).
+ *  - `cap_within`: cap row when bucket < cap (cap doesn't bind).
+ */
+export type CapStatus =
+  | "pre_cap"
+  | "in_cap"
+  | "absorbed"
+  | "cap_binding"
+  | "cap_at"
+  | "cap_within";
 
 /**
  * Self-contained calculation record. Includes the v1 terms snapshot so it
@@ -211,12 +239,22 @@ export type CalculationRecord = {
       source: LineSource;
     }>;
   };
-  /** Ordered worksheet rows. Order = order applied. */
+  /**
+   * Ordered worksheet rows. Order = order applied.
+   *
+   * `runningBalance` is set on rows that participate in the gross→net
+   * deduction tally (each row's value is the balance AFTER applying that
+   * row's `amount`). Snapshot rows after the deduction phase
+   * (Net box office, artist share, guarantee comparison, bonus rows) and
+   * the informational "In-cap bucket subtotal" row leave it undefined.
+   */
   steps: Array<{
     label: string;
     amount: number;
     source: LineSource;
     note?: string;
+    runningBalance?: number;
+    capStatus?: CapStatus;
   }>;
   netBoxOffice: number;
   artistShare: number;

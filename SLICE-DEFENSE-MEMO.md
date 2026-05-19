@@ -73,3 +73,13 @@ The right ordering is: break the causal chain first (F0/F1/F2), then attack the 
 ## Closing
 
 The bet is that **trust is the actual product** (Theme 2), and trust requires three things working together: a deal email that can't lie about its own terms (F0), an engine that produces the same number the spreadsheet would (F1), and an audit trail the TM can verify in front of Mariana at 2am (F2). The themes from the research aren't six separate problems — they're two clusters. The first cluster (T1, T2, T3, T5) is one knot. F0 + F1 + F2 unties it. The second cluster (T4, T6) is the next ship.
+
+---
+
+## Addendum — Final submission pass
+
+The slice as originally framed was vertically narrow on purpose: prove the full chain end-to-end on the canonical Coastal Spell dispute, accept a Coastal-only product surface around a vs-shaped engine. The submission pass widened the mouth without changing the slice's strategic bet:
+
+- **F0 covers any vs show, not just Coastal-shaped emails.** Deal-record fallbacks (`mergeDealRecordFallbacks`) fill `guarantee_amount`, `artist_percent`, `expense_cap`, and gross-threshold bonus rows from the deal row when the prose was silent. The form became a generic `parsed.ambiguities.map(...)` loop with a per-id `deductionAmounts` state — the next ambiguity type adds a parser emitter, not a UI card. This is what moves the slice from "one show works" to "the same pipeline lights up for the 188 vs deals in the DB."
+- **F2 gets honest line-by-line traceability.** Each worksheet row carries a running balance, a cap-status badge (`pre-cap` / `in cap` / `cap binds` / `at cap` / `within cap` / `absorbed`), and at boundary cases (Coastal's exact numbers) an explicit "in-cap bucket → cap" row that's emitted *even when savings = 0*. The point of F2 is that a TM at 2am can answer Diego's questions without asking Mariana; silently skipping the cap row when it doesn't move money was the opposite of that.
+- **What was deliberately *not* done in this pass.** Engine extensions for net-basis deductions, net-basis bonus tiers, and merging non-gross-threshold rows from `bonusesJson` — those touch the math, would need new fixtures, and have a real regression surface. They were named explicitly as "Phase B" and sequenced for a later pass. The bet of this pass: widen the input surface and deepen the audit trail without putting the engine math at risk. 18 tests assert it (12 engine + 4 parser + 2 blocker).

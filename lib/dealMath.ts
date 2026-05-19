@@ -440,22 +440,34 @@ function calculateVsDeal(params: {
   const totalToArtist = winnerAmount + totalBonuses;
 
   // Build the auditable record. Every step in the formula becomes one row.
+  // why: `running` tracks the live balance through the deduction phase so
+  // each row can carry where the math sits after applying it. Snapshot rows
+  // (Net, artist share, guarantee comparison, bonuses) leave runningBalance
+  // undefined since they're values rather than deltas.
   const recordSteps: CalculationRecord["steps"] = [];
+  const fmt = (n: number) => n.toFixed(2);
+  let running = grossBoxOffice;
   recordSteps.push({
     label: "Gross box office",
     amount: grossBoxOffice,
     source: "computed",
+    runningBalance: running,
   });
+  running -= totalFees;
   recordSteps.push({
     label: "CC + platform fees",
     amount: -totalFees,
     source: "pos",
+    runningBalance: running,
   });
   for (const d of preCapDeductionRows) {
+    running -= d.amount;
     recordSteps.push({
       label: `${d.label} (pre-cap)`,
       amount: -d.amount,
       source: "deal-term",
+      runningBalance: running,
+      capStatus: "pre_cap",
     });
   }
   for (const e of expenses) {
@@ -465,30 +477,73 @@ function calculateVsDeal(params: {
         amount: 0,
         source: "absorbed",
         note: e.description ?? "Absorbed by venue — not deducted",
+        runningBalance: running,
+        capStatus: "absorbed",
       });
     } else {
+      running -= e.amount;
       recordSteps.push({
         label: `Expense: ${e.category}`,
         amount: -e.amount,
         source: "manual",
         note: e.description ?? undefined,
+        runningBalance: running,
+        capStatus: capActive ? "in_cap" : undefined,
       });
     }
   }
   for (const d of inCapDeductionRows) {
+    running -= d.amount;
     recordSteps.push({
       label: `${d.label} (in-cap)`,
       amount: -d.amount,
       source: "deal-term",
+      runningBalance: running,
+      capStatus: capActive ? "in_cap" : undefined,
     });
   }
-  if (capSavings > 0 && capAmount != null) {
+  // why: when a cap exists, surface the bucket value before the cap is
+  // applied (transparency #10) and then ALWAYS emit a cap row — even when
+  // savings == 0. This is what makes the cap operation visible at boundary
+  // cases like Coastal Spell (expenses + recoup = cap), where the old
+  // engine silently skipped the cap row and a reader couldn't tell whether
+  // the cap had been considered.
+  if (capActive && capAmount != null) {
     recordSteps.push({
-      label: "Expense cap applied",
-      amount: capSavings,
-      source: "deal-term",
-      note: `MIN(${inCapBucket.toFixed(2)}, ${capAmount.toFixed(2)}) — cap saved ${capSavings.toFixed(2)} (blocked_by_cap)`,
+      label: "In-cap bucket subtotal",
+      amount: inCapBucket,
+      source: "computed",
+      note: `expenses ${fmt(nonAbsorbedExpensesSum)} + in-cap deductions ${fmt(inCapDeductionsSum)} = ${fmt(inCapBucket)}`,
     });
+    if (capSavings > 0) {
+      running += capSavings;
+      recordSteps.push({
+        label: "Expense cap applied",
+        amount: capSavings,
+        source: "deal-term",
+        note: `MIN(bucket ${fmt(inCapBucket)}, cap ${fmt(capAmount)}) — cap saved ${fmt(capSavings)}`,
+        runningBalance: running,
+        capStatus: "cap_binding",
+      });
+    } else if (inCapBucket === capAmount) {
+      recordSteps.push({
+        label: "Expense cap (at boundary)",
+        amount: 0,
+        source: "deal-term",
+        note: `Bucket ${fmt(inCapBucket)} equals cap ${fmt(capAmount)} — both recoup readings collapse here.`,
+        runningBalance: running,
+        capStatus: "cap_at",
+      });
+    } else {
+      recordSteps.push({
+        label: "Expense cap (within cap)",
+        amount: 0,
+        source: "deal-term",
+        note: `Bucket ${fmt(inCapBucket)} < cap ${fmt(capAmount)} — cap doesn't bind.`,
+        runningBalance: running,
+        capStatus: "cap_within",
+      });
+    }
   }
   recordSteps.push({
     label: "Net box office",

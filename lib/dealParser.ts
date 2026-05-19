@@ -16,7 +16,13 @@
  * is designed to force a choice on at deal entry.
  */
 
-import type { Ambiguity, CapScope, ParsedDealTerms } from "./dealTerms";
+import type { Deal } from "@/db/schema";
+import type {
+  Ambiguity,
+  CapScope,
+  DealTermsBonusTier,
+  ParsedDealTerms,
+} from "./dealTerms";
 
 const MARKETING_RECOUP_ID = "marketing_recoup";
 const MARKETING_RECOUP_LABEL = "Marketing Recoup";
@@ -165,6 +171,77 @@ function extractSentence(text: string, index: number): string {
   const endMatch = after.match(/[.!?](\s|$)/);
   const end = endMatch ? index + (endMatch.index ?? 0) + 1 : text.length;
   return text.slice(start, end).trim();
+}
+
+/**
+ * Fill any unset `extracted` fields from the deal record. The email parser
+ * is regex-based and will miss anything not in Coastal-shaped prose — this
+ * fallback lets the confirm form light up with sensible defaults whenever
+ * the booker stored numbers on the deal row even though the prose didn't.
+ *
+ * Phase A scope: guarantee, artist %, expense cap, and gross-threshold
+ * bonus_tiers from `deal.bonusesJson`. Deductions are deliberately NOT
+ * synthesized from the deal record — there is no structured deductions
+ * field on deals, and asking the booker to confirm a deduction that
+ * came from nowhere would be the opposite of F0's contract.
+ */
+export function mergeDealRecordFallbacks(
+  parsed: ParsedDealTerms,
+  deal: Deal,
+): ParsedDealTerms {
+  const extracted: ParsedDealTerms["extracted"] = { ...parsed.extracted };
+
+  if (extracted.guarantee_amount == null && deal.guaranteeAmount != null) {
+    extracted.guarantee_amount = deal.guaranteeAmount;
+  }
+  if (extracted.artist_percent == null && deal.percentage != null) {
+    extracted.artist_percent = deal.percentage;
+  }
+  if (extracted.expense_cap == null && deal.expenseCap != null) {
+    extracted.expense_cap = { exists: true, cap_amount: deal.expenseCap };
+  }
+  if (
+    (!extracted.bonus_tiers || extracted.bonus_tiers.length === 0) &&
+    deal.bonusesJson
+  ) {
+    const tiers = bonusesJsonToTiers(deal.bonusesJson);
+    if (tiers.length > 0) extracted.bonus_tiers = tiers;
+  }
+
+  return { ...parsed, extracted };
+}
+
+function bonusesJsonToTiers(json: string): DealTermsBonusTier[] {
+  try {
+    const arr = JSON.parse(json);
+    if (!Array.isArray(arr)) return [];
+    const tiers: DealTermsBonusTier[] = [];
+    for (const b of arr) {
+      // why: only `gross_threshold` maps cleanly to `bonus_tiers` (which
+      // expects a threshold + flat amount on a gross or net basis). Sellout
+      // and attendance bonuses live in a different shape and would need
+      // engine changes before the confirm UI can offer them — that's
+      // Phase B scope.
+      if (
+        b &&
+        typeof b === "object" &&
+        b.type === "gross_threshold" &&
+        typeof b.threshold === "number" &&
+        typeof b.amount === "number"
+      ) {
+        tiers.push({
+          threshold_amount: b.threshold,
+          basis: "gross",
+          percent_above_threshold: 0,
+          flat_amount: b.amount,
+          label: typeof b.label === "string" ? b.label : undefined,
+        });
+      }
+    }
+    return tiers;
+  } catch {
+    return [];
+  }
 }
 
 function makeRecoupAmbiguity(

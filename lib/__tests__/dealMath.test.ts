@@ -223,3 +223,306 @@ test("net-basis deduction returns terms_not_supported blocker", () => {
   if (result.supported) return;
   assert.equal(result.blocker, "terms_not_supported");
 });
+
+// -------- Phase A + Transparency fixtures --------
+//
+// A second vs show that isn't Coastal Spell-shaped: no cap, two pre-cap
+// deductions, no bonuses. Locks in "any vs show settles" without an
+// expense cap or recoup ambiguity in play.
+
+function uncappedMultiDeductionDeal(): Deal {
+  return {
+    id: "deal-amber-glow",
+    showId: "show-amber-glow",
+    dealType: "vs",
+    guaranteeAmount: 3000,
+    percentage: null,
+    percentageBasis: null,
+    expenseCap: null,
+    hospitalityCap: null,
+    bonusesJson: null,
+    dealNotesFreetext: null,
+    dealTermsJson: null,
+    createdAt: new Date("2025-01-15T00:00:00Z"),
+  };
+}
+
+function uncappedTicketSales(): TicketSale[] {
+  return [
+    {
+      id: "ts-amber-1",
+      showId: "show-amber-glow",
+      qty: 120,
+      gross: 10000,
+      fees: 1000,
+      capturedAt: new Date("2025-04-20T23:00:00Z"),
+    },
+  ];
+}
+
+function uncappedExpenses(): Expense[] {
+  return [
+    {
+      id: "ex-amber-1",
+      showId: "show-amber-glow",
+      category: "production",
+      amount: 800,
+      description: "Production line",
+      approved: true,
+      absorbedByVenue: false,
+      enteredByUserId: null,
+      enteredAt: new Date("2025-04-20T23:30:00Z"),
+    },
+  ];
+}
+
+function uncappedTerms(): DealTermsV1 {
+  return {
+    deal_terms_version: DEAL_TERMS_VERSION,
+    deal_type: "vs_deal",
+    guarantee_amount: 3000,
+    artist_percent: 0.8,
+    expense_cap: { exists: false, cap_amount: null },
+    deductions: [
+      {
+        id: "marketing_recoup",
+        label: "Marketing Recoup",
+        amount: 500,
+        basis: "gross",
+        cap_scope: "outside_cap",
+        ordering_priority: 10,
+      },
+      {
+        id: "hospitality_overage",
+        label: "Hospitality Overage",
+        amount: 300,
+        basis: "gross",
+        cap_scope: "outside_cap",
+        ordering_priority: 20,
+      },
+    ],
+    bonus_tiers: [],
+    source_text: "fixture: uncapped multi-deduction vs",
+    confirmed_at: "2025-04-19T18:00:00Z",
+  };
+}
+
+test("Test 4 — uncapped vs with two pre-cap deductions", () => {
+  const result = calculateSettlement({
+    deal: uncappedMultiDeductionDeal(),
+    ticketSales: uncappedTicketSales(),
+    expenses: uncappedExpenses(),
+    confirmedTerms: uncappedTerms(),
+  });
+
+  assert.equal(result.supported, true);
+  if (!result.supported) return;
+
+  // 10000 − 1000 (fees) − 500 (recoup) − 300 (hospitality) − 800 (expenses) = 7400
+  // 80% × 7400 = 5920; guarantee 3000 < 5920 → share wins
+  assert.equal(result.netBoxOffice, 7400);
+  assert.equal(result.totalToArtist, 5920);
+  assert.ok(result.calculationRecord);
+  assert.equal(
+    result.calculationRecord.guaranteeComparison.winner,
+    "artist_share",
+  );
+});
+
+// A third fixture where the cap actually binds (savings > 0) and there is
+// an in-cap deduction. Exercises both the in_cap and cap_binding capStatus
+// branches that Phase A transparency adds to the worksheet.
+
+function capBindsDeal(): Deal {
+  return {
+    id: "deal-river-tide",
+    showId: "show-river-tide",
+    dealType: "vs",
+    guaranteeAmount: 5000,
+    percentage: null,
+    percentageBasis: null,
+    expenseCap: 2000,
+    hospitalityCap: null,
+    bonusesJson: null,
+    dealNotesFreetext: null,
+    dealTermsJson: null,
+    createdAt: new Date("2025-02-01T00:00:00Z"),
+  };
+}
+
+function capBindsTicketSales(): TicketSale[] {
+  return [
+    {
+      id: "ts-river-1",
+      showId: "show-river-tide",
+      qty: 200,
+      gross: 20000,
+      fees: 2000,
+      capturedAt: new Date("2025-05-10T23:00:00Z"),
+    },
+  ];
+}
+
+function capBindsExpenses(): Expense[] {
+  return [
+    {
+      id: "ex-river-1",
+      showId: "show-river-tide",
+      category: "production",
+      amount: 3000,
+      description: "Production line",
+      approved: true,
+      absorbedByVenue: false,
+      enteredByUserId: null,
+      enteredAt: new Date("2025-05-10T23:30:00Z"),
+    },
+  ];
+}
+
+function capBindsTerms(): DealTermsV1 {
+  return {
+    deal_terms_version: DEAL_TERMS_VERSION,
+    deal_type: "vs_deal",
+    guarantee_amount: 5000,
+    artist_percent: 0.8,
+    expense_cap: { exists: true, cap_amount: 2000 },
+    deductions: [
+      {
+        id: "marketing_recoup",
+        label: "Marketing Recoup",
+        amount: 500,
+        basis: "gross",
+        cap_scope: "inside_cap",
+        ordering_priority: 10,
+      },
+    ],
+    bonus_tiers: [],
+    source_text: "fixture: cap binds, in-cap recoup",
+    confirmed_at: "2025-05-09T18:00:00Z",
+  };
+}
+
+test("Test 5 — cap binds, in-cap recoup → capSavings > 0", () => {
+  const result = calculateSettlement({
+    deal: capBindsDeal(),
+    ticketSales: capBindsTicketSales(),
+    expenses: capBindsExpenses(),
+    confirmedTerms: capBindsTerms(),
+  });
+
+  assert.equal(result.supported, true);
+  if (!result.supported) return;
+
+  // bucket = expenses 3000 + in-cap recoup 500 = 3500; cap 2000 → capped 2000
+  // 20000 − 2000 (fees) − 0 (pre-cap) − 2000 (capped) = 16000
+  // 80% × 16000 = 12800; guarantee 5000 < 12800 → share wins
+  assert.equal(result.netBoxOffice, 16000);
+  assert.equal(result.totalToArtist, 12800);
+});
+
+// -------- Transparency: running balance + cap status --------
+
+test("running balance is set on every deduction-phase step", () => {
+  const result = calculateSettlement({
+    deal: vsDeal(),
+    ticketSales: coastalTicketSales(),
+    expenses: coastalExpenses(),
+    confirmedTerms: baseTerms(),
+  });
+  assert.equal(result.supported, true);
+  if (!result.supported || !result.calculationRecord) return;
+
+  const steps = result.calculationRecord.steps;
+  const gross = steps.find((s) => s.label === "Gross box office");
+  assert.equal(gross?.runningBalance, 19840);
+
+  // Final running balance through the deduction phase equals netBoxOffice.
+  const stepsWithBalance = steps.filter((s) => s.runningBalance != null);
+  const last = stepsWithBalance[stepsWithBalance.length - 1];
+  assert.equal(last.runningBalance, result.netBoxOffice);
+});
+
+test("Coastal Spell worksheet emits cap rows even when savings = 0", () => {
+  const result = calculateSettlement({
+    deal: vsDeal(),
+    ticketSales: coastalTicketSales(),
+    expenses: coastalExpenses(),
+    confirmedTerms: baseTerms(),
+  });
+  assert.equal(result.supported, true);
+  if (!result.supported || !result.calculationRecord) return;
+
+  const steps = result.calculationRecord.steps;
+  // Bucket subtotal row (informational) and cap row (no savings) should both
+  // appear. The Coastal Spell case sits exactly on the boundary
+  // (expenses 2500 + in-cap 0 = cap 2500), so the cap row carries
+  // capStatus "cap_at".
+  const bucket = steps.find((s) =>
+    /in-cap bucket subtotal/i.test(s.label),
+  );
+  const capRow = steps.find((s) => s.capStatus?.startsWith("cap_"));
+  assert.ok(bucket, "expected in-cap bucket subtotal row");
+  assert.ok(capRow, "expected cap row with capStatus");
+  assert.equal(capRow.capStatus, "cap_at");
+});
+
+test("cap_binding capStatus surfaces when bucket > cap", () => {
+  const result = calculateSettlement({
+    deal: capBindsDeal(),
+    ticketSales: capBindsTicketSales(),
+    expenses: capBindsExpenses(),
+    confirmedTerms: capBindsTerms(),
+  });
+  assert.equal(result.supported, true);
+  if (!result.supported || !result.calculationRecord) return;
+
+  const capRow = result.calculationRecord.steps.find((s) =>
+    s.capStatus?.startsWith("cap_"),
+  );
+  assert.equal(capRow?.capStatus, "cap_binding");
+  // Cap savings = bucket 3500 − cap 2000 = 1500; emitted as a positive amount.
+  assert.equal(capRow?.amount, 1500);
+});
+
+test("pre_cap and in_cap capStatuses are tagged on deduction rows", () => {
+  const result = calculateSettlement({
+    deal: vsDeal(),
+    ticketSales: coastalTicketSales(),
+    expenses: coastalExpenses(),
+    confirmedTerms: baseTerms(),
+  });
+  assert.equal(result.supported, true);
+  if (!result.supported || !result.calculationRecord) return;
+
+  const steps = result.calculationRecord.steps;
+  const recoupRow = steps.find((s) => /Marketing Recoup/i.test(s.label));
+  assert.equal(recoupRow?.capStatus, "pre_cap");
+  // Non-absorbed expense lives in the cap bucket; should be tagged in_cap.
+  const expenseRow = steps.find((s) => s.label.startsWith("Expense:"));
+  assert.equal(expenseRow?.capStatus, "in_cap");
+});
+
+test("uncapped vs deductions stay pre_cap and skip the bucket/cap rows", () => {
+  const result = calculateSettlement({
+    deal: uncappedMultiDeductionDeal(),
+    ticketSales: uncappedTicketSales(),
+    expenses: uncappedExpenses(),
+    confirmedTerms: uncappedTerms(),
+  });
+  assert.equal(result.supported, true);
+  if (!result.supported || !result.calculationRecord) return;
+
+  const steps = result.calculationRecord.steps;
+  const bucket = steps.find((s) =>
+    /in-cap bucket subtotal/i.test(s.label),
+  );
+  const capRow = steps.find((s) => s.capStatus?.startsWith("cap_"));
+  assert.equal(bucket, undefined, "no bucket row when uncapped");
+  assert.equal(capRow, undefined, "no cap row when uncapped");
+  // Both deductions are outside_cap → pre_cap status.
+  const deductionRows = steps.filter((s) => /(Recoup|Overage)/i.test(s.label));
+  assert.equal(deductionRows.length, 2);
+  for (const row of deductionRows) {
+    assert.equal(row.capStatus, "pre_cap");
+  }
+});
