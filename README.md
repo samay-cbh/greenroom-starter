@@ -4,11 +4,42 @@
 
 **Software for independent music venues.**
 
-This is the starter codebase for the Greenroom Applied AI PM case study.
+Case study submission: **Vs Deal Calculator + Settlement Transparency**
 
 </div>
 
 ---
+
+## What this branch adds
+
+This fork extends the starter with **F0 (deal-term parser) → F1 (vs deal engine) → F2 (auditable settlement statement)** — a coupled slice that takes Coastal Spell (the canonical $720 dispute) from spreadsheet math to in-platform settlement with a versioned audit trail.
+
+| Feature | What it does | Where it lives |
+|---|---|---|
+| **F0** — Deal-term parser + forced choice | Parses `dealNotesFreetext`, surfaces ambiguities (e.g. marketing recoup cap scope), persists **Deal Terms Schema v1** | `lib/dealParser.ts`, `/shows/[id]/confirm-terms` |
+| **F1** — Vs deal engine | `MAX(guarantee, artist% × net) + bonuses` with ordered deductions | `lib/dealMath.ts` |
+| **F2** — Auditable statement | Per-line source badges, guarantee comparison, counterfactual block, `calculation_json` | `/shows/[id]/settle` |
+
+**Companion docs:** [`MEMO.md`](MEMO.md) (3–5 page submission memo) · [`prd.md`](prd.md) (full PRD) · [`CASE-STUDY-NOTES.md`](CASE-STUDY-NOTES.md) (build notes + demo path) · [`SLICE-DEFENSE-MEMO.md`](SLICE-DEFENSE-MEMO.md)
+
+### Quick demo (Coastal Spell)
+
+```bash
+npm install
+npm run db:reset    # clean DB — Coastal Spell starts with no confirmed terms
+npm run dev         # http://localhost:3000
+npm test            # 3 golden tests (includes $720 delta assertion)
+```
+
+1. Open **[http://localhost:3000/shows/show_coastal_spell_dispute/settle](http://localhost:3000/shows/show_coastal_spell_dispute/settle)** — vs deal, no confirmed terms yet.
+2. Click **Confirm deal terms** → resolve the marketing-recoup ambiguity → submit.
+3. Return to settle — auditable worksheet renders with confirmed-terms banner, source badges, and populated `calculation_json`.
+
+Optional: `npx tsx scripts/seed-coastal-terms.ts pre 1000` to show the **$720 counterfactual block** when the expense cap binds. Revert with `pre 2500`.
+
+---
+
+## Starter context
 
 You're looking at a working but mediocre product. It's enough to feel real, but every workflow has gaps. **Your job isn't to fix everything — it's to pick a slice and design it well.** See your case study brief for full instructions.
 
@@ -81,7 +112,8 @@ You're logged in automatically as **Mariana Reyes**, lead booker at The Crescent
 |---|---|
 | `/shows` | Mariana's home view. 24 months of completed shows, searchable and grouped by month. |
 | `/shows/[id]` | Show detail. Deal terms, artist info, ticket sales, expenses, comps. |
-| `/shows/[id]/settle` | The in-app settlement worksheet. **Try it on a few shows.** |
+| `/shows/[id]/confirm-terms` | **New.** Deal-term parser + forced-choice confirmation (F0). |
+| `/shows/[id]/settle` | The in-app settlement worksheet. **Try Coastal Spell after confirming terms.** |
 | `/artists` | Roster of artists who've played the venue, bucketed by frequency. |
 | `/reports` | Aggregate metrics. The numbers Pri (the CEO) is watching. |
 | `/context` | Orientation for you, the candidate. Linked from the sidebar. |
@@ -89,10 +121,10 @@ You're logged in automatically as **Mariana Reyes**, lead booker at The Crescent
 ### Recommended path your first time through
 
 1. Open `/context` (the sidebar's "Where to start" link). 5-minute tour.
-2. Then `/shows`. Pick a Vs-deal show. Click **Settle**. See what's broken.
-3. Pick a Flat-deal show. Click **Settle**. See what works.
-4. Read `data/transcripts/*.md` and `data/ceo-memo.md`.
-5. Look at `data/dispute-thread.md`. Then press **⌘K** and search "Coastal Spell" to find the matching show.
+2. Walk the **Coastal Spell demo** above — confirm terms, then settle.
+3. Pick a Flat-deal show. Click **Settle**. See what already worked before this build.
+4. Read `data/transcripts/*.md`, `data/ceo-memo.md`, and `data/dispute-thread.md`.
+5. Press **⌘K** and search "Coastal Spell" to jump back anytime.
 
 ---
 
@@ -156,7 +188,8 @@ app/
   context/                  # Candidate orientation page
   shows/                    # Show list with search + month grouping
   shows/[id]/               # Show detail (concert poster-style header)
-  shows/[id]/settle/        # The settlement worksheet (hero number layout)
+  shows/[id]/confirm-terms/ # F0: deal-term parser + forced-choice confirmation
+  shows/[id]/settle/        # F2: auditable settlement worksheet
   artists/                  # Artist roster (card grid with genre dots)
   reports/                  # Aggregate metrics + craft gap analysis
   icon.svg                  # Brand favicon
@@ -169,9 +202,17 @@ components/
     sidebar.tsx             # Fixed sidebar with active nav state
     nav-links.tsx           # Client component for pathname-aware nav
 lib/
-  dealMath.ts               # The settlement engine (deliberately incomplete)
+  dealMath.ts               # Settlement engine — flat, % of gross, and vs deals (F1)
+  dealParser.ts             # F0: deterministic deal-term parser (regex stub)
+  dealTerms.ts              # Deal Terms Schema v1 + CalculationRecord contract
+  settlementBlocker.ts    # Pre-settle gating (confirmed terms required for vs)
   queries.ts                # Server-side data fetching (past shows only)
   format.ts                 # Money + date helpers
+  __tests__/                # Golden tests (Coastal Spell $720 delta + flat regression)
+scripts/
+  db-reset.ts               # Cross-platform db:reset helper
+  seed-coastal-terms.ts     # Demo helper: toggle recoup cap scope / cap amount
+  check-coastal-calc.ts     # Demo helper: log calculation_json summary
 db/
   schema.ts                 # All tables, commented
   seed.ts                   # The 24-month synthetic seed
@@ -191,6 +232,20 @@ data/                       # Markdown context + greenroom.db
 - **lucide-react** for icons, **date-fns** for dates
 
 Everything is deliberately conventional. Use Cursor, Claude Code, or any other AI tool to navigate and modify the codebase — we expect you to.
+
+---
+
+## Tests
+
+```bash
+npm test
+```
+
+Three golden tests via Node's built-in test runner:
+
+1. Coastal Spell — recoup **outside** cap → **$11,564.80**
+2. Coastal Spell — recoup **inside** cap → **$12,284.80** ($720 delta asserted)
+3. Flat deal regression — existing flat path unchanged
 
 ---
 
