@@ -81,9 +81,10 @@ export function compareShadowToFields(
     });
   }
 
-  // guaranteeAmount — $1 tolerance for rounding
+  // guaranteeAmount — $1 tolerance for rounding; skip if shadow returned 0 (means "not mentioned")
   if (
     shadow.guaranteeAmount != null &&
+    shadow.guaranteeAmount !== 0 &&
     Math.abs((deal.guaranteeAmount ?? 0) - shadow.guaranteeAmount) > 1 &&
     !out.has("guaranteeAmount")
   ) {
@@ -98,9 +99,10 @@ export function compareShadowToFields(
     });
   }
 
-  // percentage — 0.5% tolerance
+  // percentage — 0.5% tolerance; skip if shadow returned 0 (means "not mentioned")
   if (
     shadow.percentage != null &&
+    shadow.percentage !== 0 &&
     Math.abs((deal.percentage ?? 0) - shadow.percentage) > 0.005 &&
     !out.has("percentage")
   ) {
@@ -115,9 +117,10 @@ export function compareShadowToFields(
     });
   }
 
-  // expenseCap — $1 tolerance
+  // expenseCap — $1 tolerance; skip if shadow returned 0 (means "not mentioned", not a $0 cap)
   if (
     shadow.expenseCap != null &&
+    shadow.expenseCap !== 0 &&
     Math.abs((deal.expenseCap ?? 0) - shadow.expenseCap) > 1 &&
     !out.has("expenseCap")
   ) {
@@ -150,16 +153,23 @@ export function compareShadowToFields(
     });
   }
 
-  // recoupBasis ambiguity — shadow extracted a recoup quote but basis is null on deal
+  // recoupBasis ambiguity — basis is unknown; check recoup justification first,
+  // then fall back to scanning for marketing language in any justification quote.
   if (!deal.recoupBasis && !out.has("recoupBasis_ambiguity")) {
-    const excerpt = justify("recoupBasis");
+    const recoupExcerpt = justify("recoupBasis");
+    const marketingJustification = !recoupExcerpt
+      ? shadow.justifications?.find((j) => /marketing/i.test(j.quote))
+      : null;
+    const excerpt = recoupExcerpt || marketingJustification?.quote || "";
+
     if (excerpt) {
       ambiguities.push({
         field: "recoupBasis",
-        label: "Recoup basis",
+        label: marketingJustification ? "Marketing expense treatment" : "Recoup basis",
         excerpt,
-        question:
-          "Notes mention a recoup. Should it apply inside the expense cap or as a separate gross deduction?",
+        question: marketingJustification
+          ? "Notes mention a marketing expense. Is this inside the expense cap, or a separate deduction outside it?"
+          : "Notes mention a recoup. Should it apply inside the expense cap or as a separate gross deduction?",
       });
     }
   }

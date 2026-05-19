@@ -78,11 +78,11 @@ const RESPONSE_SCHEMA = {
       type: SchemaType.OBJECT,
       properties: {
         dealType: { type: SchemaType.STRING, enum: ["flat", "vs", "percentage_of_net", "percentage_of_gross", "door"] },
-        guaranteeAmount: { type: SchemaType.NUMBER },
-        percentage: { type: SchemaType.NUMBER },
-        percentageBasis: { type: SchemaType.STRING, enum: ["gross", "net"] },
-        expenseCap: { type: SchemaType.NUMBER },
-        recoupBasis: { type: SchemaType.STRING, enum: ["inside_cap", "outside_cap"] },
+        guaranteeAmount: { type: SchemaType.NUMBER, nullable: true },
+        percentage: { type: SchemaType.NUMBER, nullable: true },
+        percentageBasis: { type: SchemaType.STRING, enum: ["gross", "net"], nullable: true },
+        expenseCap: { type: SchemaType.NUMBER, nullable: true },
+        recoupBasis: { type: SchemaType.STRING, enum: ["inside_cap", "outside_cap"], nullable: true },
         justifications: {
           type: SchemaType.ARRAY,
           items: {
@@ -159,6 +159,9 @@ Return everything in the requested JSON format.
 CRITICAL RULE 1: Build the shadowDeal EXCLUSIVELY from the "Deal notes". 
 CRITICAL RULE 2: DO NOT use any numbers or values found in the "Current structured fields" section to populate the shadowDeal. Those fields are ONLY for Step 2 (finding contradictions).
 CRITICAL RULE 3: If a value (like expenseCap or recoupBasis) is NOT explicitly mentioned in the notes, you MUST leave it null. Never guess or reuse values.
+CRITICAL RULE 4: Never set a numeric field to 0 to mean "not mentioned" or "no cap". 0 is a real value meaning zero dollars. If the notes don't state an expenseCap, set it to null — not 0.
+CRITICAL RULE 5: Phrases like "no expenses" or "no cap" in the notes do NOT mean expenseCap = 0. They mean expenseCap = null (not set). Do not flag a contradiction for a field that is simply absent from the notes.
+CRITICAL RULE 6: The expenseCap is a ceiling on TOTAL expenses charged to the artist (e.g. "expenses capped at $2,500", "expense cap $700"). A marketing recoup, marketing expense, or marketing cost is a SPECIFIC line item — it is NOT the expense cap. If notes say something like "500 on marketing expense", "marketing recoup of $900", or "marketing cost $X", do NOT set expenseCap to that value. Instead, add a justification entry with field "recoupBasis" and the relevant quote, so the ambiguity (inside cap or outside cap?) can be surfaced to the user.
 `;
 
 // -------- Format helpers --------
@@ -241,12 +244,26 @@ TASK:
     return null;
   }
 
+  // Drop contradictions where the AI suggested 0 for a cap/amount field —
+  // this means the notes didn't mention the value; 0 is not a meaningful cap.
+  const CAP_FIELDS = new Set(["expenseCap", "hospitalityCap", "guaranteeAmount"]);
+  const cleanedContradictions = (raw.contradictions ?? []).filter((c) => {
+    if (CAP_FIELDS.has(c.field) && (c.suggestedValue === "0" || c.suggestedValue === 0)) return false;
+    return true;
+  });
+
+  // Drop shadow deal numeric fields that came back as 0 (model didn't find them, defaulted to 0)
+  const shadow = raw.shadowDeal;
+  if (shadow.guaranteeAmount === 0) shadow.guaranteeAmount = null;
+  if (shadow.expenseCap === 0) shadow.expenseCap = null;
+  if (shadow.percentage === 0) shadow.percentage = null;
+
   const extraction: NotesExtractionResult = {
-    contradictions: raw.contradictions ?? [],
+    contradictions: cleanedContradictions,
     ambiguities: raw.ambiguities ?? [],
-    shadowDeal: raw.shadowDeal,
+    shadowDeal: shadow,
     extractedAt: new Date().toISOString(),
-    hasIssues: (raw.contradictions?.length ?? 0) > 0 || (raw.ambiguities?.length ?? 0) > 0,
+    hasIssues: cleanedContradictions.length > 0 || (raw.ambiguities?.length ?? 0) > 0,
   };
 
   await db

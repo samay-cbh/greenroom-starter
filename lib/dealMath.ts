@@ -1,31 +1,17 @@
 /**
  * Deal calculation logic for the in-app settlement tool.
  *
- * IMPORTANT — DELIBERATELY INCOMPLETE.
+ * Supported deal types:
+ *   1. flat                 — $X guaranteed, optional bonuses
+ *   2. percentage_of_gross  — X% of gross, no expense deductions
+ *   3. percentage_of_net    — X% of net after expenses, optional guarantee floor
+ *   4. vs                   — max(guarantee, X% of net), full expense cap logic
  *
- * This is the existing Greenroom settlement engine. It was built early in
- * the company's life, when most deals were flat guarantees. It currently
- * handles two deal types end-to-end:
- *
- *   1. flat                 — $X guaranteed, optional sellout bonus
- *   2. percentage_of_gross  — X% of gross, no expense deductions, optional sellout bonus
- *
- * For both, it reads `bonusesJson` and applies bonuses where it can — but
- * only the structured ones. Bonuses that exist only in `dealNotesFreetext`
- * are invisible to this engine.
- *
- * It does NOT handle:
- *
- *   - vs deals (guarantee vs % of net, whichever greater)
- *   - percentage_of_net deals (with expense deductions)
+ * Not yet supported:
  *   - door deals
- *   - recoups (those flow separately through the settlement record)
- *   - tier ratchets (would need vs-deal support first)
+ *   - tier ratchets (applyBonuses handles them gracefully but doesn't calculate)
  *   - comps that count toward gross
- *
- * For unsupported deals, the tool returns { supported: false } and the UI
- * shows the "this deal type isn't yet supported" empty state. About 82% of
- * Greenroom's customers default to spreadsheets because of this.
+ *   - recoups (flow separately through the settlement record)
  */
 
 import type { Deal, Expense, TicketSale, Bonus } from "@/db/schema";
@@ -455,14 +441,12 @@ function applyBonuses(
         });
       }
     } else if (b.type === "tier_ratchet") {
-      // Tier ratchets fundamentally change the percentage structure. The
-      // current engine only supports flat % of gross — we can't apply a
-      // ratcheting structure on top of it without knowing which deal type
-      // it's modifying. Report as not-applicable.
+      // Tier ratchets change the percentage dynamically based on sell-through —
+      // they need bespoke math per deal. Report as not calculated for now.
       notTriggered.push({
         label: b.label,
         amount: 0,
-        reason: "Tier ratchets need vs-deal or % of net support — not yet handled",
+        reason: "Tier ratchet — not yet calculated by the engine",
       });
     }
   }

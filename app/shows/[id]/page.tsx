@@ -21,9 +21,9 @@ import { Button } from "@/components/ui/button";
 import { parseBonuses, calculateSettlement } from "@/lib/dealMath";
 import { parseStoredExtraction, isRateLimited } from "@/lib/notesExtractor";
 import { parseShadowDeal, parseShadowDismissals, compareShadowToFields } from "@/lib/shadowComparison";
+import { CapTracker } from "./cap-tracker";
 import { NotesEditor } from "./notes-editor";
 import { NotesExtractionBadge } from "./notes-extraction-badge";
-import { CapTracker } from "./cap-tracker";
 import {
   formatMoney,
   formatMoneyCompact,
@@ -62,6 +62,7 @@ export default async function ShowDetailPage({
     expenses,
     recoups,
     comps,
+    venue,
   } = data;
 
   const grossSoFar = ticketSales.reduce((sum, t) => sum + t.gross, 0);
@@ -415,6 +416,9 @@ export default async function ShowDetailPage({
                     No sales yet.
                   </div>
                 )}
+                {venue?.capacity != null && (
+                  <VenueFill sold={totalTickets} capacity={venue.capacity} />
+                )}
               </div>
             </CardContent>
           </Card>
@@ -555,6 +559,30 @@ function MiniStat({
       <div className="eyebrow text-[9px] text-ink-400">{label}</div>
       <div className={`text-[18px] font-mono tabular font-semibold mt-0.5 leading-none ${accent ? "text-brand-700" : "text-ink-900"}`}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+function VenueFill({ sold, capacity }: { sold: number; capacity: number }) {
+  const pct = Math.min(100, (sold / capacity) * 100);
+  const pctLabel = pct.toFixed(0);
+  const color =
+    pct >= 90 ? "bg-emerald-500" : pct >= 60 ? "bg-brand-500" : "bg-ink-300";
+
+  return (
+    <div className="pt-3 border-t border-ink-100/80 space-y-1.5">
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="text-ink-400 eyebrow">Venue fill</span>
+        <span className="font-mono tabular-nums text-ink-600 font-medium">
+          {sold.toLocaleString()} / {capacity.toLocaleString()} · {pctLabel}%
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-ink-100 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${color}`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );

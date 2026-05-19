@@ -41,15 +41,19 @@ export async function PATCH(
     (update as Record<string, unknown>).notesExtractionJson = null;
   }
 
+  // When notes are saved, clear dismissals upfront so the fresh extraction
+  // surfaces contradictions the user previously dismissed against old notes.
+  if ("dealNotesFreetext" in update) {
+    (update as Record<string, unknown>).shadowDismissalsJson = null;
+  }
+
   const result = await db.update(deals).set(update).where(eq(deals.showId, id));
   if (!result.rowsAffected) {
     return NextResponse.json({ error: "No deal found for this show" }, { status: 404 });
   }
 
   // Re-run extraction after a notes save so the badge reflects the new text.
-  // Also clear dismissals — the new shadow deal may surface different issues.
   if ("dealNotesFreetext" in update) {
-    (update as Record<string, unknown>).shadowDismissalsJson = null;
     const updated = await getShowById(id);
     if (updated?.deal) await extractAndStoreNotes(updated.deal);
   }

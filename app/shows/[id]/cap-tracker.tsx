@@ -1,12 +1,5 @@
 import type { Deal, Expense } from "@/db/schema";
 
-/**
- * Layer B — real-time cap tracker.
- *
- * Shows how expenses are burning against the deal caps right now.
- * No AI. Just arithmetic surfaced before show night so Mariana
- * isn't surprised at settlement.
- */
 export function CapTracker({
   deal,
   expenses,
@@ -25,11 +18,7 @@ export function CapTracker({
     .filter((e) => e.category === "hospitality")
     .reduce((s, e) => s + e.amount, 0);
 
-  const rows: {
-    label: string;
-    spent: number;
-    cap: number | null;
-  }[] = [];
+  const rows: { label: string; spent: number; cap: number }[] = [];
 
   if (deal.expenseCap != null) {
     rows.push({ label: "Total expenses vs cap", spent: totalExpenses, cap: deal.expenseCap });
@@ -44,10 +33,9 @@ export function CapTracker({
     <div className="rounded-lg ring-1 ring-ink-200/50 bg-canvas-soft p-4 space-y-3">
       <div className="eyebrow text-[10px] text-ink-500">Expense caps</div>
       {rows.map((row) => {
-        const cap = row.cap!;
-        const pct = Math.min(100, (row.spent / cap) * 100);
-        const over = row.spent > cap;
-        const overage = row.spent - cap;
+        const pct = Math.min(100, (row.spent / row.cap) * 100);
+        const over = row.spent > row.cap;
+        const overage = row.spent - row.cap;
 
         return (
           <div key={row.label} className="space-y-1.5">
@@ -56,13 +44,13 @@ export function CapTracker({
               <span className={`font-mono font-medium tabular-nums ${over ? "text-rose-700" : "text-ink-800"}`}>
                 ${row.spent.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 {" / "}
-                ${cap.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                ${row.cap.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </span>
             </div>
             <div className="h-1.5 rounded-full bg-ink-100 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${over ? "bg-rose-500" : pct > 85 ? "bg-amber-400" : "bg-emerald-500"}`}
-                style={{ width: `${Math.min(100, pct)}%` }}
+                style={{ width: `${pct}%` }}
               />
             </div>
             {over && (
