@@ -6,8 +6,13 @@ import {
   ArrowRight,
   Check,
   AlertTriangle,
+  Brain,
+  CheckCircle2,
+  ChevronRight,
   Mail,
   Pencil,
+  SearchCheck,
+  ShieldAlert,
   XCircle,
   Wallet,
   TrendingUp,
@@ -23,6 +28,12 @@ import {
 } from "@/components/ui/card";
 import { StatusBadge, DealTypeBadge, PlainBadge } from "@/components/ui/badge";
 import { calculateSettlement } from "@/lib/dealMath";
+import {
+  analyzeSettlementConfidence,
+  type ConfidenceIssue,
+  type SettlementConfidenceResult,
+  type SettlementExplanation,
+} from "@/lib/settlementConfidence";
 import {
   formatMoney,
   formatShowDateFull,
@@ -67,6 +78,13 @@ export default async function SettlePage({
     ticketSales,
     expenses,
     venueCapacity: data.venue?.capacity ?? undefined,
+  });
+  const confidence = analyzeSettlementConfidence({
+    deal,
+    ticketSales,
+    expenses,
+    settlement,
+    recoups,
   });
   const grossSoFar = ticketSales.reduce((sum, t) => sum + t.gross, 0);
   const totalFees = ticketSales.reduce((sum, t) => sum + t.fees, 0);
@@ -127,6 +145,8 @@ export default async function SettlePage({
       )}
 
       <div className="space-y-6 mt-6">
+        <SettlementConfidenceAssistant result={confidence} />
+
         {!calc.supported ? (
           <UnsupportedDeal
             dealType={calc.dealType}
@@ -174,6 +194,241 @@ export default async function SettlePage({
       </div>
     </div>
   );
+}
+
+function SettlementConfidenceAssistant({
+  result,
+}: {
+  result: SettlementConfidenceResult;
+}) {
+  const criticalCount = result.issues.filter((i) => i.severity === "critical").length;
+  const warningCount = result.issues.filter((i) => i.severity === "warning").length;
+  const levelVariant: "brand" | "amber" | "rose" =
+    result.level === "high" ? "brand" : result.level === "medium" ? "amber" : "rose";
+  const accent: "brand" | "amber" | "rose" =
+    result.level === "high" ? "brand" : result.level === "medium" ? "amber" : "rose";
+
+  return (
+    <Card accent={accent}>
+      <CardHeader className="items-center">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-lg bg-canvas-soft ring-1 ring-ink-200/70 flex items-center justify-center">
+            <Brain className="h-4 w-4 text-brand-700" />
+          </div>
+          <div>
+            <CardTitle>Settlement Confidence Assistant</CardTitle>
+            <CardDescription>
+              Interprets deal notes, flags ambiguity, and traces settlement lines to their source.
+            </CardDescription>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <PlainBadge variant={levelVariant}>
+            {result.score}% {result.level}
+          </PlainBadge>
+          {(criticalCount > 0 || warningCount > 0) && (
+            <PlainBadge variant={criticalCount > 0 ? "rose" : "amber"}>
+              {criticalCount + warningCount} review item{criticalCount + warningCount === 1 ? "" : "s"}
+            </PlainBadge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
+          <div className="rounded-lg bg-canvas-soft ring-1 ring-ink-200/60 p-4">
+            <div className="eyebrow text-[10px] text-ink-500 mb-3">
+              AI interpretation
+            </div>
+            <div className="space-y-3">
+              <MiniInterpretation label="Deal read" value={dealTypeLabel(result.interpretation.dealType)} />
+              <MiniInterpretation
+                label="Guarantee"
+                value={result.interpretation.guarantee != null ? formatMoney(result.interpretation.guarantee) : "Not found"}
+                mono
+              />
+              <MiniInterpretation
+                label="Upside"
+                value={
+                  result.interpretation.percentage != null
+                    ? `${result.interpretation.percentage}% of ${result.interpretation.percentageBasis ?? "unclear basis"}`
+                    : "Not found"
+                }
+                mono
+              />
+              <MiniInterpretation
+                label="Walkout"
+                value={
+                  result.interpretation.walkoutThreshold != null
+                    ? `after ${result.interpretation.walkoutThreshold} paid`
+                    : "None detected"
+                }
+                mono={result.interpretation.walkoutThreshold != null}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="rounded-lg bg-white ring-1 ring-ink-200/70 p-4 flex gap-3">
+              {result.level === "high" ? (
+                <CheckCircle2 className="h-4 w-4 text-brand-700 mt-0.5 shrink-0" />
+              ) : (
+                <ShieldAlert className={`h-4 w-4 mt-0.5 shrink-0 ${result.level === "low" ? "text-rose-700" : "text-amber-700"}`} />
+              )}
+              <div>
+                <div className="text-[13px] font-semibold text-ink-900">
+                  {result.summary}
+                </div>
+                <p className="text-[12.5px] text-ink-500 leading-relaxed mt-1">
+                  This assistant is intentionally conservative: it proposes an interpretation and tells Mariana what needs human review before she puts the number in front of a tour manager.
+                </p>
+              </div>
+            </div>
+
+            {result.issues.length > 0 && (
+              <div className="mt-4 divide-y divide-ink-100/80 rounded-lg ring-1 ring-ink-200/70 overflow-hidden">
+                {result.issues.slice(0, 4).map((issue) => (
+                  <ReviewIssueRow key={issue.id} issue={issue} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <SearchCheck className="h-3.5 w-3.5 text-brand-700" />
+            <div className="eyebrow text-[10px] text-ink-500">
+              Source-backed settlement lines
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {result.explanations.slice(0, 8).map((explanation) => (
+              <ExplanationCard key={explanation.id} explanation={explanation} />
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniInterpretation({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase font-semibold text-ink-400">
+        {label}
+      </div>
+      <div className={`text-[13px] text-ink-900 mt-0.5 ${mono ? "font-mono tabular" : ""}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ReviewIssueRow({ issue }: { issue: ConfidenceIssue }) {
+  const variant: "rose" | "amber" | "sky" =
+    issue.severity === "critical" ? "rose" : issue.severity === "warning" ? "amber" : "sky";
+  return (
+    <div className="bg-white p-3.5">
+      <div className="flex items-start gap-3">
+        <AlertTriangle
+          className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${
+            issue.severity === "critical"
+              ? "text-rose-700"
+              : issue.severity === "warning"
+                ? "text-amber-700"
+                : "text-sky-700"
+          }`}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="text-[12.5px] font-semibold text-ink-900">
+              {issue.title}
+            </div>
+            <PlainBadge variant={variant}>{issue.severity}</PlainBadge>
+          </div>
+          <div className="text-[12px] text-ink-500 mt-1 leading-relaxed">
+            {issue.detail}
+          </div>
+          {issue.sourceText && (
+            <div className="mt-2 text-[11.5px] text-ink-700 bg-canvas-soft rounded-md px-3 py-2 ring-1 ring-ink-200/50 leading-relaxed">
+              {issue.sourceText}
+            </div>
+          )}
+          <div className="mt-2 flex items-start gap-1 text-[11.5px] text-ink-500 leading-relaxed">
+            <ChevronRight className="h-3 w-3 mt-0.5 shrink-0" />
+            {issue.recommendation}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExplanationCard({
+  explanation,
+}: {
+  explanation: SettlementExplanation;
+}) {
+  const variant: "brand" | "amber" | "rose" =
+    explanation.confidence === "high"
+      ? "brand"
+      : explanation.confidence === "medium"
+        ? "amber"
+        : "rose";
+  return (
+    <div className="rounded-lg ring-1 ring-ink-200/70 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-ink-900 leading-tight">
+            {explanation.label}
+          </div>
+          <div className="text-[12px] text-ink-500 mt-1 leading-relaxed">
+            {explanation.why}
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          {explanation.amount != null && (
+            <div className="font-mono tabular text-[13px] text-ink-900">
+              {formatMoney(explanation.amount)}
+            </div>
+          )}
+          <PlainBadge variant={variant} className="mt-1">
+            {explanation.confidence}
+          </PlainBadge>
+        </div>
+      </div>
+      <div className="mt-3 text-[11.5px] text-ink-700 bg-canvas-soft rounded-md px-3 py-2 ring-1 ring-ink-200/50 leading-relaxed">
+        {explanation.source}
+      </div>
+      {explanation.status && (
+        <div className="mt-2 text-[11px] text-ink-400">
+          Status: <span className="font-medium text-ink-600">{explanation.status}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function dealTypeLabel(type: SettlementConfidenceResult["interpretation"]["dealType"]) {
+  const labels: Record<SettlementConfidenceResult["interpretation"]["dealType"], string> = {
+    vs_net: "Vs net",
+    vs_gross: "Vs gross",
+    percentage_net: "% of net",
+    percentage_gross: "% of gross",
+    flat: "Flat",
+    door: "Door",
+    unknown: "Needs review",
+  };
+  return labels[type];
 }
 
 function BackLink({ showId }: { showId: string }) {
