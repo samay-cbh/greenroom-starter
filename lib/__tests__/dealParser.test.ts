@@ -66,6 +66,23 @@ test("Email with no recoup emits zero ambiguities", () => {
   assert.equal(parsed.extracted.deductions ?? undefined, undefined);
 });
 
+test("Guarantee without $ prefix is captured via 'g'tee' keyword", () => {
+  // Real shorthand from a booker's draft: number first, no $, then "g'tee",
+  // followed by an unrelated hospitality dollar amount that the old
+  // first-$-in-text heuristic would have wrongly grabbed as the guarantee.
+  const parsed = parseDealEmail(
+    "4,988 g'tee vs 90% gross — no expenses come out. Simpler math, riskier for venue. Hosp $400.",
+  );
+  assert.equal(parsed.extracted.guarantee_amount, 4988);
+  assert.equal(parsed.extracted.artist_percent, 0.9);
+});
+
+test("Guarantee captured via 'vs <pct>%' when no $ or keyword present", () => {
+  const parsed = parseDealEmail("3500 vs 85% gross.");
+  assert.equal(parsed.extracted.guarantee_amount, 3500);
+  assert.equal(parsed.extracted.artist_percent, 0.85);
+});
+
 test("Bonus tier is parsed onto extracted.bonus_tiers", () => {
   const parsed = parseDealEmail(COASTAL_EMAIL);
   assert.equal(parsed.extracted.bonus_tiers?.length, 1);

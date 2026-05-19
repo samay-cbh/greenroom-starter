@@ -42,16 +42,32 @@ export function parseDealEmail(text: string): ParsedDealTerms {
   const ambiguities: Ambiguity[] = [];
   const confidence: ParsedDealTerms["confidence"] = {};
 
-  // ----- guarantee: first $X(,XXX) in the text -----
-  // Trade-off: a real parser would tie this to "vs" / "guarantee" keywords.
-  // For the demo, the first dollar figure in a deal email is reliably the
-  // guarantee (it's how bookers write them: "$5,000 vs 80% …").
-  const guaranteeMatch = text.match(/\$([\d,]+(?:\.\d+)?)/);
-  if (guaranteeMatch) {
-    const v = parseAmount(guaranteeMatch[1]);
-    if (!isNaN(v) && v >= 100) {
-      extracted.guarantee_amount = v;
-      confidence.guarantee_amount = "high";
+  // ----- guarantee -----
+  // Keyword-anchored patterns first — they're high-precision and survive the
+  // common shorthand where bookers drop the $ sign ("4,988 g'tee vs 90%
+  // gross"). Falling back to "first $N in the email" works for canonical
+  // emails like Coastal Spell ("$5,000 vs 80% …") but mis-captures the
+  // hospitality line when the guarantee was written without a $.
+  const guaranteePatterns: RegExp[] = [
+    // "<amount> g'tee | gtee | guarantee" — number before the keyword
+    /\$?(\d[\d,]*(?:\.\d+)?)\s*(?:g'?tee|gtee|guarantee)\b/i,
+    // "guarantee | g'tee <of|:|space> <amount>" — number after the keyword
+    /(?:g'?tee|gtee|guarantee)\s*(?:of\s+|:\s*)?\$?(\d[\d,]*(?:\.\d+)?)/i,
+    // "<amount> vs <pct>%" — canonical vs-deal phrasing, $ optional
+    /\$?(\d[\d,]*(?:\.\d+)?)\s+vs\s+\d{1,3}\s*%/i,
+    // Fallback: first $X(,XXX) in the email — preserves prior behaviour for
+    // emails that don't use a guarantee keyword or "vs" phrasing.
+    /\$([\d,]+(?:\.\d+)?)/,
+  ];
+  for (const pat of guaranteePatterns) {
+    const m = text.match(pat);
+    if (m) {
+      const v = parseAmount(m[1]);
+      if (!isNaN(v) && v >= 100) {
+        extracted.guarantee_amount = v;
+        confidence.guarantee_amount = "high";
+        break;
+      }
     }
   }
   if (extracted.guarantee_amount == null) confidence.guarantee_amount = "low";
