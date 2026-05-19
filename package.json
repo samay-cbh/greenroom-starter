@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx --test lib/__tests__/*.test.ts",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx db/seed.ts",
-    "db:reset": "rm -f data/greenroom.db && drizzle-kit push && tsx db/seed.ts",
+    "db:reset": "tsx scripts/db-reset.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test *)",
+      "PowerShell(\\(Get-Content \"app\\\\shows\\\\[id]\\\\settle\\\\page.tsx\" | Measure-Object -Line\\).Lines; \\(Get-Content prd.md | Measure-Object -Line\\).Lines; \\(Get-Content CASE-STUDY-NOTES.md | Measure-Object -Line\\).Lines)",
+      "PowerShell(Get-ChildItem -LiteralPath \"app\\\\shows\\\\[id]\\\\confirm-terms\" -Recurse | Select-Object FullName, Length; \"---\"; Get-ChildItem -LiteralPath \"scripts\" | Select-Object FullName, Length; \"---\"; \\(Get-Content -LiteralPath \"app\\\\shows\\\\[id]\\\\settle\\\\page.tsx\" | Measure-Object -Line\\).Lines)",
+      "Bash(command -v sqlite3)",
+      "Bash(npx tsx *)",
+      "Bash(ls -la \"C:\\\\Users\\\\Administrator\\\\.claude\\\\debug\\\\\" 2>&1 | head -20; echo \"---\"; ls -la \"C:\\\\Users\\\\Administrator\\\\.claude\\\\daemon.log\" 2>&1; echo \"---\"; ls \"C:\\\\Users\\\\Administrator\\\\.claude\\\\settings.json\" \"c:\\\\Users\\\\Administrator\\\\greenroom-starter-case-study\\\\.claude\\\\settings.json\" \"c:\\\\Users\\\\Administrator\\\\greenroom-starter-case-study\\\\.claude\\\\settings.local.json\" 2>&1)",
+      "Read(//c/Users/Administrator/.claude/**)",
+      "PowerShell($debug = \"C:\\\\Users\\\\Administrator\\\\.claude\\\\debug\"; if \\(Test-Path $debug\\) { Get-ChildItem $debug | Select-Object Name, Length, LastWriteTime } else { \"no debug dir\" }; \"---\"; $daemon = \"C:\\\\Users\\\\Administrator\\\\.claude\\\\daemon.log\"; if \\(Test-Path $daemon\\) { \"daemon.log exists, $\\(\\(Get-Item $daemon\\).Length\\) bytes\" } else { \"no daemon.log\" }; \"---\"; foreach \\($p in @\\(\"C:\\\\Users\\\\Administrator\\\\.claude\\\\settings.json\", \"c:\\\\Users\\\\Administrator\\\\greenroom-starter-case-study\\\\.claude\\\\settings.json\", \"c:\\\\Users\\\\Administrator\\\\greenroom-starter-case-study\\\\.claude\\\\settings.local.json\"\\)\\) { if \\(Test-Path $p\\) { \"exists: $p\" } else { \"missing: $p\" } })",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(git push *)",
+      "PowerShell(Get-Command sqlite3 -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command python -ErrorAction SilentlyContinue)",
+      "Bash(cat)",
+      "Bash(python /tmp/compare_dbs.py)",
+      "Bash(cp /tmp/version_a.db \"C:\\\\\\\\temp\\\\\\\\version_a.db\")",
+      "Bash(cp /tmp/version_b.db \"C:\\\\\\\\temp\\\\\\\\version_b.db\")",
+      "PowerShell(if \\(!\\(Test-Path C:\\\\temp\\)\\) { New-Item -ItemType Directory -Path C:\\\\temp -Force | Out-Null }; Copy-Item /tmp/version_a.db C:\\\\temp\\\\version_a.db -Force; Copy-Item /tmp/version_b.db C:\\\\temp\\\\version_b.db -Force; \"Files copied\")",
+      "Bash(dd of=/tmp/va.db)",
+      "Bash(dd of=/tmp/vb.db)",
+      "Bash(ls -lh /tmp/v*.db)",
+      "Bash(python3)",
+      "Bash(/c/Python314/python.exe)",
+      "Bash(cp /tmp/va.db ./data/va.db)",
+      "Bash(cp /tmp/vb.db ./data/vb.db)",
+      "Bash(rm compare_dbs.py data/greenroom_a.db && git status)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Administrator\\greenroom-starter-case-study"
+    ]
+  }
+}

@@ -125,6 +125,15 @@ export const deals = sqliteTable("deals", {
   bonusesJson: text("bonuses_json"),
   dealNotesFreetext: text("deal_notes_freetext"),
 
+  /**
+   * Structured deal terms confirmed by the booker (F0 output, Deal Terms
+   * Schema v1). See lib/dealTerms.ts → DealTermsV1. JSON-encoded; the
+   * `deal_terms_version: "deal_terms_v1"` discriminator identifies the shape.
+   * Null until the booker confirms terms for a vs deal. Legacy pre-v1
+   * payloads are auto-migrated by parseDealTermsJson().
+   */
+  dealTermsJson: text("deal_terms_json"),
+
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

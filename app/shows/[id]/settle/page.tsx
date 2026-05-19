@@ -6,8 +6,11 @@ import {
   ArrowRight,
   Check,
   AlertTriangle,
+  ClipboardList,
+  Info,
   Mail,
   Pencil,
+  Sparkles,
   XCircle,
   Wallet,
   TrendingUp,
@@ -24,11 +27,27 @@ import {
 import { StatusBadge, DealTypeBadge, PlainBadge } from "@/components/ui/badge";
 import { calculateSettlement } from "@/lib/dealMath";
 import {
+  getBlockerPresentation,
+  resolveSettlementBlocker,
+} from "@/lib/settlementBlocker";
+import {
   formatMoney,
   formatShowDateFull,
 } from "@/lib/format";
 import type { Settlement, Recoup } from "@/db/schema";
 import { Logomark } from "@/components/brand/logo";
+import {
+  flipRecoupCapScope,
+  getMarketingRecoup,
+  parseDealTermsJson,
+  recoupInterpretationsCollapse,
+  type CalculationRecord,
+  type CapStatus,
+  type LineSource,
+} from "@/lib/dealTerms";
+import { db } from "@/db";
+import { settlements } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 const RECOUP_LABELS: Record<Recoup["category"], string> = {
   marketing: "Marketing",
@@ -62,12 +81,73 @@ export default async function SettlePage({
     );
   }
 
+  const confirmedTerms = parseDealTermsJson(deal.dealTermsJson);
+  const termsParseFailed = Boolean(deal.dealTermsJson) && !confirmedTerms;
+
   const calc = calculateSettlement({
     deal,
     ticketSales,
     expenses,
     venueCapacity: data.venue?.capacity ?? undefined,
+    confirmedTerms: confirmedTerms ?? undefined,
   });
+
+  // Counterfactual: when the deal has a marketing recoup, also calculate
+  // what the total WOULD have been under the opposite cap_scope. The F2
+  // statement surfaces the delta so the audit trail makes the choice's
+  // impact explicit — and so cases where the cap absorbs both reads don't
+  // mislead the reader into thinking the choice was unimportant.
+  let altTotalToArtist: number | null = null;
+  if (
+    calc.supported &&
+    calc.calculationRecord &&
+    confirmedTerms &&
+    getMarketingRecoup(confirmedTerms)
+  ) {
+    const altCalc = calculateSettlement({
+      deal,
+      ticketSales,
+      expenses,
+      venueCapacity: data.venue?.capacity ?? undefined,
+      confirmedTerms: flipRecoupCapScope(confirmedTerms),
+    });
+    if (altCalc.supported) altTotalToArtist = altCalc.totalToArtist;
+  }
+
+  // Persist calculation_json on the existing settlement record when the
+  // engine produces an auditable record. Idempotent: same inputs produce
+  // the same record body (modulo `calculatedAt`, which is intentional —
+  // see CalculationRecord.version). We only UPDATE; creating a new
+  // settlement row pulls in lifecycle/timestamp logic out of scope here.
+  if (calc.supported && calc.calculationRecord && settlement?.id) {
+    const nextJson = JSON.stringify(calc.calculationRecord);
+    // why: the engine sets `calculatedAt = new Date().toISOString()` on every
+    // run, so a naïve JSON-equality check would mark every render as dirty
+    // and issue an UPDATE on every page load. Compare structural fingerprints
+    // (everything except calculatedAt) so we only write when inputs/output
+    // actually changed. Persisted JSON still carries calculatedAt as the
+    // most-recent computation timestamp.
+    const fingerprint = (json: string | null): string | null => {
+      if (!json) return null;
+      try {
+        const { calculatedAt: _ignored, ...rest } = JSON.parse(json);
+        return JSON.stringify(rest);
+      } catch {
+        return json;
+      }
+    };
+    if (fingerprint(settlement.calculationJson) !== fingerprint(nextJson)) {
+      try {
+        await db
+          .update(settlements)
+          .set({ calculationJson: nextJson })
+          .where(eq(settlements.id, settlement.id));
+      } catch {
+        // Non-fatal: the page still renders the calculation; persistence is
+        // best-effort for the prototype.
+      }
+    }
+  }
   const grossSoFar = ticketSales.reduce((sum, t) => sum + t.gross, 0);
   const totalFees = ticketSales.reduce((sum, t) => sum + t.fees, 0);
   const totalExpenses = expenses
@@ -128,9 +208,10 @@ export default async function SettlePage({
 
       <div className="space-y-6 mt-6">
         {!calc.supported ? (
-          <UnsupportedDeal
-            dealType={calc.dealType}
+          <SettlementBlocked
+            calc={calc}
             deal={deal}
+            termsParseFailed={termsParseFailed}
             existingSettlement={settlement}
             grossSoFar={grossSoFar}
             totalFees={totalFees}
@@ -139,7 +220,12 @@ export default async function SettlePage({
             expenseRowCount={expenses.length}
           />
         ) : (
-          <SupportedSettlement calc={calc} existingSettlement={settlement} />
+          <SupportedSettlement
+            calc={calc}
+            existingSettlement={settlement}
+            showId={show.id}
+            altTotalToArtist={altTotalToArtist ?? undefined}
+          />
         )}
 
         {recoups.length > 0 && <RecoupsSection recoups={recoups} />}
@@ -355,9 +441,10 @@ function LifecycleBar({
   );
 }
 
-function UnsupportedDeal({
-  dealType,
+function SettlementBlocked({
+  calc,
   deal,
+  termsParseFailed,
   existingSettlement,
   grossSoFar,
   totalFees,
@@ -365,8 +452,9 @@ function UnsupportedDeal({
   ticketCount,
   expenseRowCount,
 }: {
-  dealType: string;
-  deal: NonNullable<Awaited<ReturnType<typeof getShowById>>>["deal"];
+  calc: Extract<ReturnType<typeof calculateSettlement>, { supported: false }>;
+  deal: NonNullable<NonNullable<Awaited<ReturnType<typeof getShowById>>>["deal"]>;
+  termsParseFailed: boolean;
   existingSettlement: NonNullable<
     Awaited<ReturnType<typeof getShowById>>
   >["settlement"];
@@ -376,39 +464,100 @@ function UnsupportedDeal({
   ticketCount: number;
   expenseRowCount: number;
 }) {
-  const friendly: Record<string, string> = {
-    flat: "flat guarantee",
-    percentage_of_gross: "percentage of gross",
-    percentage_of_net: "percentage of net",
-    vs: "vs deal",
-    door: "door deal",
-  };
+  const blocker = resolveSettlementBlocker(calc, { termsParseFailed });
+  const hasSignedSettlement = Boolean(
+    existingSettlement?.signedAt ||
+      existingSettlement?.status === "signed" ||
+      existingSettlement?.status === "finalized" ||
+      existingSettlement?.status === "paid",
+  );
+  const ui = getBlockerPresentation(blocker, {
+    dealType: calc.dealType,
+    showId: deal.showId,
+    reason: calc.reason,
+    hasSignedSettlement,
+  });
+
+  const iconWrap =
+    ui.accent === "brand"
+      ? "bg-brand-50 ring-brand-200/80"
+      : ui.accent === "rose"
+        ? "bg-rose-50 ring-rose-200/80"
+        : "bg-amber-50 ring-amber-200/80";
+  const iconColor =
+    ui.accent === "brand"
+      ? "text-brand-700"
+      : ui.accent === "rose"
+        ? "text-rose-700"
+        : "text-amber-700";
+
+  const BlockerIcon =
+    ui.icon === "confirm"
+      ? ClipboardList
+      : ui.icon === "error"
+        ? XCircle
+        : FileWarning;
 
   return (
     <>
-      <Card accent="amber">
-        <CardContent className="py-12 text-center">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 ring-1 ring-amber-200/80 mb-5">
-            <FileWarning className="h-5 w-5 text-amber-700" />
+      <Card accent={ui.accent}>
+        <CardContent className="py-10 px-6 sm:px-10">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-6">
+            <div
+              className={`inline-flex h-12 w-12 items-center justify-center rounded-full ring-1 shrink-0 ${iconWrap}`}
+            >
+              <BlockerIcon className={`h-5 w-5 ${iconColor}`} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2
+                className="font-display text-[22px] font-medium text-ink-900 leading-snug"
+                style={{ letterSpacing: "-0.02em" }}
+              >
+                {ui.title}
+              </h2>
+              <p className="text-[13px] text-ink-500 mt-2 max-w-2xl leading-relaxed">
+                {ui.description}
+              </p>
+              {ui.detail && (
+                <p className="text-[12.5px] text-ink-600 mt-3 rounded-lg bg-canvas-soft px-3 py-2.5 ring-1 ring-ink-200/60 max-w-2xl leading-relaxed">
+                  {ui.detail}
+                </p>
+              )}
+              {(ui.primaryAction || ui.secondaryAction) && (
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  {ui.primaryAction && (
+                    <Link
+                      href={ui.primaryAction.href}
+                      className={
+                        ui.accent === "brand"
+                          ? "inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-medium bg-brand-700 text-white hover:bg-brand-800 shadow-sm shadow-brand-700/15 ring-1 ring-inset ring-brand-800/20 transition-colors"
+                          : "inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-medium bg-ink-900 text-white hover:bg-ink-800 ring-1 ring-inset ring-ink-900/20 transition-colors"
+                      }
+                    >
+                      {ui.primaryAction.label}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  )}
+                  {ui.secondaryAction && (
+                    <Link
+                      href={ui.secondaryAction.href}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-medium text-ink-700 bg-white hover:bg-canvas-soft ring-1 ring-ink-200/80 transition-colors"
+                    >
+                      {ui.secondaryAction.label}
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <h2 className="font-display text-[22px] font-medium text-ink-900 mb-2" style={{ letterSpacing: "-0.02em" }}>
-            The in-app tool can&apos;t settle a {friendly[dealType] ?? dealType} yet.
-          </h2>
-          <p className="text-[13px] text-ink-500 max-w-md mx-auto leading-relaxed">
-            Mariana would do this on a Google Sheet at 2am tonight. The inputs
-            are below — but the math doesn&apos;t happen here.
-          </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
           <div>
-            <CardTitle>What the system has</CardTitle>
-            <CardDescription>
-              The inputs Mariana would pull together to settle this show.
-              They&apos;re here — but disconnected from the deal terms.
-            </CardDescription>
+            <CardTitle>{ui.inputsHeading}</CardTitle>
+            <CardDescription>{ui.inputsDescription}</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -459,11 +608,8 @@ function UnsupportedDeal({
         >
           <CardHeader>
             <div>
-              <CardTitle>Actually settled (off-platform)</CardTitle>
-              <CardDescription>
-                Mariana ran this in a spreadsheet. Here&apos;s the result that
-                was logged back into Greenroom afterward.
-              </CardDescription>
+              <CardTitle>{ui.offPlatformTitle}</CardTitle>
+              <CardDescription>{ui.offPlatformDescription}</CardDescription>
             </div>
             {existingSettlement.status === "disputed" ? (
               <PlainBadge variant="rose">Disputed</PlainBadge>
@@ -488,6 +634,8 @@ function UnsupportedDeal({
 function SupportedSettlement({
   calc,
   existingSettlement,
+  showId,
+  altTotalToArtist,
 }: {
   calc: Extract<
     ReturnType<typeof calculateSettlement>,
@@ -496,14 +644,17 @@ function SupportedSettlement({
   existingSettlement: NonNullable<
     Awaited<ReturnType<typeof getShowById>>
   >["settlement"];
+  showId: string;
+  altTotalToArtist?: number;
 }) {
+  const record = calc.calculationRecord;
   return (
     <>
       {/* Hero number */}
       <div className="text-center py-10 mb-2">
         <div className="eyebrow text-[10px] text-ink-400 mb-3">Total to artist</div>
         <div
-          className="text-[72px] font-mono tabular font-bold text-ink-900 leading-none"
+          className="text-[56px] sm:text-[72px] font-mono tabular font-bold text-ink-900 leading-none"
           style={{ letterSpacing: "-0.03em" }}
         >
           {formatMoney(calc.totalToArtist)}
@@ -531,44 +682,16 @@ function SupportedSettlement({
         )}
       </div>
 
-      {/* Worksheet breakdown */}
-      <Card accent="brand">
-        <CardHeader>
-          <div>
-            <CardTitle>Settlement worksheet</CardTitle>
-            <CardDescription className="font-mono">
-              {calc.finalFormula}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="divide-y divide-ink-100/80">
-          <Row
-            label="Gross box office"
-            value={formatMoney(calc.grossBoxOffice)}
-          />
-          <Row label="Net box office" value={formatMoney(calc.netBoxOffice)} />
-          <Row
-            label="Total expenses (passed through)"
-            value={formatMoney(calc.totalExpenses)}
-          />
-          <div className="pt-3" />
-          {calc.steps.map((step, i) => (
-            <Row
-              key={i}
-              label={step.label}
-              value={formatMoney(step.value)}
-              note={step.note}
-            />
-          ))}
-          <div className="pt-3" />
-          <div className="flex items-baseline justify-between py-3 font-semibold">
-            <span className="text-[13px] text-ink-900">Total to artist</span>
-            <span className="text-[18px] font-mono tabular text-ink-900">
-              {formatMoney(calc.totalToArtist)}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+      {record ? (
+        <AuditableWorksheet
+          calc={calc}
+          record={record}
+          showId={showId}
+          altTotalToArtist={altTotalToArtist}
+        />
+      ) : (
+        <LegacyWorksheet calc={calc} />
+      )}
 
       {calc.bonusesNotTriggered.length > 0 && (
         <Card>
@@ -601,6 +724,409 @@ function SupportedSettlement({
         </Card>
       )}
     </>
+  );
+}
+
+/**
+ * Pre-F1 worksheet — used by flat and percentage_of_gross. Unchanged.
+ */
+function LegacyWorksheet({
+  calc,
+}: {
+  calc: Extract<ReturnType<typeof calculateSettlement>, { supported: true }>;
+}) {
+  return (
+    <Card accent="brand">
+      <CardHeader>
+        <div>
+          <CardTitle>Settlement worksheet</CardTitle>
+          <CardDescription className="font-mono">
+            {calc.finalFormula}
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="divide-y divide-ink-100/80">
+        <Row
+          label="Gross box office"
+          value={formatMoney(calc.grossBoxOffice)}
+        />
+        <Row label="Net box office" value={formatMoney(calc.netBoxOffice)} />
+        <Row
+          label="Total expenses (passed through)"
+          value={formatMoney(calc.totalExpenses)}
+        />
+        <div className="pt-3" />
+        {calc.steps.map((step, i) => (
+          <Row
+            key={i}
+            label={step.label}
+            value={formatMoney(step.value)}
+            note={step.note}
+          />
+        ))}
+        <div className="pt-3" />
+        <div className="flex items-baseline justify-between py-3 font-semibold">
+          <span className="text-[13px] text-ink-900">Total to artist</span>
+          <span className="text-[18px] font-mono tabular text-ink-900">
+            {formatMoney(calc.totalToArtist)}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * F2 auditable worksheet — used by vs deals once F0 terms are confirmed.
+ *
+ * Each step shows its source (deal-term / POS / manual / receipt). Absorbed
+ * expenses get their own section. The MAX(guarantee, share) comparison is
+ * surfaced as an explicit row so the TM doesn't have to infer it.
+ */
+function AuditableWorksheet({
+  calc,
+  record,
+  showId,
+  altTotalToArtist,
+}: {
+  calc: Extract<ReturnType<typeof calculateSettlement>, { supported: true }>;
+  record: CalculationRecord;
+  showId: string;
+  altTotalToArtist?: number;
+}) {
+  const absorbed = record.inputs.expenses.filter((e) => e.absorbedByVenue);
+  const visibleSteps = record.steps.filter((s) => s.source !== "absorbed");
+  const cmp = record.guaranteeComparison;
+  // Only surface the counterfactual when it differs from the confirmed total.
+  // Same-number case is handled by CapBindingNote (explains why).
+  const altDiffers =
+    typeof altTotalToArtist === "number" &&
+    Math.abs(altTotalToArtist - calc.totalToArtist) > 0.005;
+  const recoup = getMarketingRecoup(record.termsSnapshot);
+  // why: altLabel describes the OTHER reading (the counterfactual). When
+  // the confirmed reading is `outside_cap` ("off gross"), the alternative
+  // would have been `inside_cap` ("in cap") — so the inversion is intentional.
+  // Only rendered inside the `altDiffers` conditional below.
+  const altLabel =
+    recoup?.cap_scope === "outside_cap" ? "recoup in cap" : "recoup off gross";
+
+  return (
+    <>
+      {/* Confirmed terms banner — F0 → F1 traceability anchor */}
+      <Card>
+        <CardContent className="py-4 px-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Sparkles className="h-3.5 w-3.5 text-brand-700 shrink-0" />
+              <div className="text-[12.5px] text-ink-600 leading-snug">
+                Calculated against{" "}
+                <span className="font-medium text-ink-900">
+                  confirmed deal terms
+                </span>
+                {" — "}
+                <span className="font-mono tabular text-ink-500">
+                  {formatMoney(record.termsSnapshot.guarantee_amount)} vs{" "}
+                  {(record.termsSnapshot.artist_percent * 100).toFixed(0)}%
+                </span>
+                {recoup && (
+                  <>
+                    {", recoup "}
+                    <span className="font-medium text-ink-700">
+                      {recoup.cap_scope === "outside_cap" ? "off gross" : "in cap"}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+            <Link
+              href={`/shows/${showId}/confirm-terms`}
+              className="text-[11.5px] text-brand-700 hover:text-brand-800 hover:underline inline-flex items-center gap-0.5 shrink-0"
+            >
+              View terms <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <CapBindingNote record={record} />
+        </CardContent>
+      </Card>
+
+      {/* Worksheet */}
+      <Card accent="brand">
+        <CardHeader>
+          <div>
+            <CardTitle>Settlement worksheet</CardTitle>
+            <CardDescription className="font-mono text-[11.5px] break-all">
+              {calc.finalFormula}
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="divide-y divide-ink-100/80">
+          {visibleSteps.map((step, i) => (
+            <AuditableRow key={i} step={step} />
+          ))}
+          <div className="pt-3" />
+          {/* Explicit guarantee comparison */}
+          <div className="py-3 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 items-baseline bg-brand-50/40 rounded-md px-3 -mx-3 ring-1 ring-brand-100/60">
+            <div>
+              <div className="text-[12px] text-brand-800 font-medium">
+                Guarantee comparison
+              </div>
+              <div className="text-[11.5px] text-ink-600 mt-1 leading-snug">
+                Artist share{" "}
+                <span className="font-mono tabular text-ink-900">
+                  {formatMoney(cmp.artistShare)}
+                </span>{" "}
+                vs guarantee{" "}
+                <span className="font-mono tabular text-ink-900">
+                  {formatMoney(cmp.guarantee)}
+                </span>{" "}
+                — paying the{" "}
+                <span className="font-semibold text-ink-900">
+                  {cmp.winner === "guarantee" ? "guarantee (floor)" : "share"}
+                </span>
+                .
+              </div>
+            </div>
+            <div className="text-[13.5px] font-mono tabular text-ink-900 text-right sm:min-w-[100px]">
+              {formatMoney(
+                cmp.winner === "guarantee" ? cmp.guarantee : cmp.artistShare,
+              )}
+            </div>
+          </div>
+          {record.bonusesApplied.length > 0 && (
+            <>
+              <div className="pt-3" />
+              {record.bonusesApplied.map((b, i) => (
+                <AuditableRow
+                  key={`bonus-${i}`}
+                  step={{
+                    label: b.label,
+                    amount: b.amount,
+                    source: "deal-term",
+                    note: b.reason,
+                  }}
+                />
+              ))}
+            </>
+          )}
+          <div className="pt-3" />
+          <div className="flex items-baseline justify-between py-3 font-semibold">
+            <span className="text-[13px] text-ink-900">Total to artist</span>
+            <span className="text-[18px] font-mono tabular text-ink-900">
+              {formatMoney(calc.totalToArtist)}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Counterfactual: what the OTHER recoup interpretation would have paid.
+          Only rendered when it differs — same-number case is handled by
+          CapBindingNote inside the confirmed-terms banner. */}
+      {altDiffers && typeof altTotalToArtist === "number" && (
+        <Card accent="amber">
+          <CardContent className="py-4 px-5 flex items-start gap-3">
+            <Info className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-[12.5px] text-ink-700 leading-snug">
+                If the team had picked{" "}
+                <span className="font-medium text-ink-900">{altLabel}</span> at
+                confirmation, the total would be{" "}
+                <span className="font-mono tabular text-ink-900">
+                  {formatMoney(altTotalToArtist)}
+                </span>
+                {" — a "}
+                <span className="font-mono tabular font-semibold text-amber-800">
+                  {formatMoney(Math.abs(altTotalToArtist - calc.totalToArtist))}
+                </span>{" "}
+                {altTotalToArtist > calc.totalToArtist ? "higher" : "lower"}{" "}
+                payout. The audit record captures which reading was confirmed.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Absorbed expenses — distinct section so they aren't silently dropped */}
+      {absorbed.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Absorbed by venue</CardTitle>
+              <CardDescription>
+                Expenses the venue ate — not passed through to the artist
+                deduction. Surfaced so they aren&apos;t invisible.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="divide-y divide-ink-100/80">
+            {absorbed.map((e) => (
+              <div
+                key={e.id}
+                className="py-2.5 flex items-baseline justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <div className="text-[13px] text-ink-700">{e.label}</div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <SourceBadge source="absorbed" />
+                  <div className="text-[13px] font-mono tabular text-ink-500 line-through min-w-[80px] text-right">
+                    {formatMoney(e.amount)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </>
+  );
+}
+
+/**
+ * Honest disclosure for the auditable view: when expenses + recoup ≤ cap,
+ * both recoup interpretations produce the same `totalToArtist` and the
+ * "dispute" the deal-term confirmation prevents isn't visible at *this*
+ * show's numbers. Surface that — silently producing the same number under
+ * a different label would be the opposite of what F2 is for.
+ */
+function CapBindingNote({ record }: { record: CalculationRecord }) {
+  if (!recoupInterpretationsCollapse(record)) return null;
+  const recoup = getMarketingRecoup(record.termsSnapshot)!;
+  const cap = record.termsSnapshot.expense_cap.cap_amount!;
+  const nonAbsorbed = record.inputs.expenses
+    .filter((e) => !e.absorbedByVenue)
+    .reduce((s, e) => s + e.amount, 0);
+
+  return (
+    <div className="mt-3 pt-3 border-t border-ink-100/80 flex gap-2 items-start">
+      <Info className="h-3 w-3 text-ink-400 mt-0.5 shrink-0" />
+      <div className="text-[11.5px] text-ink-500 leading-snug">
+        Expenses{" "}
+        <span className="font-mono tabular">{formatMoney(nonAbsorbed)}</span> +
+        recoup{" "}
+        <span className="font-mono tabular">{formatMoney(recoup.amount)}</span>{" "}
+        = <span className="font-mono tabular">{formatMoney(cap)}</span>. The
+        cap doesn&apos;t bind at this show&apos;s numbers — both recoup
+        interpretations produce the same total here. They diverge only when
+        expenses + recoup exceed the cap; the engine still records which
+        reading was confirmed so the audit trail is complete either way.
+      </div>
+    </div>
+  );
+}
+
+function AuditableRow({
+  step,
+}: {
+  step: CalculationRecord["steps"][number];
+}) {
+  return (
+    <div className="py-2.5 grid grid-cols-[1fr_auto] gap-x-3 items-baseline">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[13px] text-ink-600 leading-snug">
+            {step.label}
+          </span>
+          {step.source !== "computed" && <SourceBadge source={step.source} />}
+          {step.capStatus && <CapStatusBadge status={step.capStatus} />}
+        </div>
+        {step.note && (
+          <div className="text-[11.5px] text-ink-400 mt-0.5 max-w-md leading-snug">
+            {step.note}
+          </div>
+        )}
+      </div>
+      <div className="text-right">
+        <div className="text-[13.5px] text-ink-900 font-mono tabular">
+          {step.amount < 0
+            ? `− ${formatMoney(-step.amount)}`
+            : formatMoney(step.amount)}
+        </div>
+        {step.runningBalance != null && (
+          <div className="text-[10.5px] text-ink-400 font-mono tabular mt-0.5">
+            = {formatMoney(step.runningBalance)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const CAP_STATUS_BADGE: Record<
+  CapStatus,
+  { label: string; classes: string }
+> = {
+  pre_cap: {
+    label: "pre-cap",
+    classes: "bg-ink-50 text-ink-600 ring-ink-200/80",
+  },
+  in_cap: {
+    label: "in cap",
+    classes: "bg-ink-50 text-ink-600 ring-ink-200/80",
+  },
+  absorbed: {
+    label: "absorbed",
+    classes: "bg-ink-50 text-ink-500 ring-ink-200/60",
+  },
+  cap_binding: {
+    label: "cap binds",
+    classes: "bg-amber-50 text-amber-800 ring-amber-200/80",
+  },
+  cap_at: {
+    label: "at cap",
+    classes: "bg-amber-50 text-amber-800 ring-amber-200/80",
+  },
+  cap_within: {
+    label: "within cap",
+    classes: "bg-ink-50 text-ink-600 ring-ink-200/80",
+  },
+};
+
+function CapStatusBadge({ status }: { status: CapStatus }) {
+  const s = CAP_STATUS_BADGE[status];
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-px rounded text-[9.5px] font-medium ring-1 ring-inset tracking-wide uppercase ${s.classes}`}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+const SOURCE_BADGE: Record<
+  LineSource,
+  { label: string; classes: string }
+> = {
+  "deal-term": {
+    label: "deal",
+    classes: "bg-brand-50 text-brand-800 ring-brand-200/80",
+  },
+  pos: { label: "POS", classes: "bg-ink-50 text-ink-700 ring-ink-200/80" },
+  receipt: {
+    label: "receipt",
+    classes: "bg-amber-50 text-amber-800 ring-amber-200/80",
+  },
+  manual: {
+    label: "manual",
+    classes: "bg-ink-50 text-ink-500 ring-ink-200/60",
+  },
+  computed: {
+    label: "computed",
+    classes: "bg-ink-50 text-ink-500 ring-ink-200/60",
+  },
+  absorbed: {
+    label: "absorbed",
+    classes: "bg-ink-50 text-ink-500 ring-ink-200/60",
+  },
+};
+
+function SourceBadge({ source }: { source: LineSource }) {
+  const s = SOURCE_BADGE[source];
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-px rounded text-[9.5px] font-medium ring-1 ring-inset tracking-wide uppercase ${s.classes}`}
+    >
+      {s.label}
+    </span>
   );
 }
 
