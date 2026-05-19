@@ -499,10 +499,6 @@ export function AIDealParser({
                   </div>
                 </CardHeader>
                 <CardContent className="divide-y divide-ink-100/80">
-                  <WorksheetRow label="Gross box office" value={fmt(calcResult.grossBoxOffice)} />
-                  <WorksheetRow label="Net box office" value={fmt(calcResult.netBoxOffice)} />
-                  <WorksheetRow label="Expenses (passed through)" value={fmt(calcResult.cappedExpenses)} />
-                  <div className="pt-3" />
                   {calcResult.steps.map((step, i) => (
                     <WorksheetRow
                       key={i}
@@ -535,13 +531,19 @@ export function AIDealParser({
 }
 
 function WorksheetRow({ label, value, note }: { label: string; value: string; note?: string }) {
+  const isResult = label.startsWith("=");
+  const isDeduction = label.startsWith("−");
+  const isBonus = !isResult && !isDeduction && !label.startsWith("×") && !label.startsWith("Flat") && !label.startsWith("Gross") && note?.includes("Applied");
+
   return (
-    <div className="flex items-baseline justify-between py-2.5">
+    <div className={`flex items-baseline justify-between py-2.5 ${isResult ? "-mx-6 px-6 bg-ink-50/60" : ""}`}>
       <div>
-        <div className="text-[13px] text-ink-600">{label}</div>
+        <div className={`text-[13px] ${isResult ? "text-ink-900 font-medium" : isDeduction ? "text-ink-400" : "text-ink-600"}`}>{label}</div>
         {note && <div className="text-[11.5px] text-ink-400 mt-0.5 max-w-md leading-snug">{note}</div>}
       </div>
-      <div className="text-[13.5px] text-ink-900 font-mono tabular">{value}</div>
+      <div className={`font-mono tabular ${isResult ? "text-[14px] text-ink-900 font-semibold" : isDeduction ? "text-[13px] text-ink-500" : isBonus ? "text-[13.5px] text-brand-700" : "text-[13.5px] text-ink-900"}`}>
+        {value}
+      </div>
     </div>
   );
 }
