@@ -11,6 +11,7 @@ import {
   XCircle,
   Wallet,
   TrendingUp,
+  BrainCircuit,
 } from "lucide-react";
 import { getShowById } from "@/lib/queries";
 import {
@@ -22,6 +23,7 @@ import {
   Field,
 } from "@/components/ui/card";
 import { StatusBadge, DealTypeBadge, PlainBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { calculateSettlement } from "@/lib/dealMath";
 import {
   formatMoney,
@@ -82,29 +84,37 @@ export default async function SettlePage({
     <div className={`px-12 py-10 max-w-7xl ${isDisputed ? "bg-gradient-to-b from-rose-50/30 via-canvas to-canvas" : ""}`}>
       <BackLink showId={show.id} />
 
-      <div className="mb-20">
-        <div className="flex items-center gap-1.5 mb-4">
-          <StatusBadge status={show.status} />
-          <DealTypeBadge type={deal.dealType} />
-          {settlement?.status === "disputed" && (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10.5px] font-medium ring-1 ring-inset bg-rose-50 text-rose-800 ring-rose-200/80">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500" />
+      <div className="mb-20 flex items-start justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-1.5 mb-4">
+            <StatusBadge status={show.status} />
+            <DealTypeBadge type={deal.dealType} />
+            {settlement?.status === "disputed" && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10.5px] font-medium ring-1 ring-inset bg-rose-50 text-rose-800 ring-rose-200/80">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500" />
+                </span>
+                Disputed
               </span>
-              Disputed
-            </span>
-          )}
-          {settlement?.status === "voided" && (
-            <PlainBadge variant="default">Voided</PlainBadge>
-          )}
+            )}
+            {settlement?.status === "voided" && (
+              <PlainBadge variant="default">Voided</PlainBadge>
+            )}
+          </div>
+          <h1 className="font-display text-[48px] font-medium text-ink-900 leading-[1.05]" style={{ letterSpacing: "-0.02em", fontOpticalSizing: "auto" }}>
+            Settlement · {artist?.name}
+          </h1>
+          <div className="text-[14px] text-ink-400 mt-3">
+            {formatShowDateFull(show.date)}
+          </div>
         </div>
-        <h1 className="font-display text-[48px] font-medium text-ink-900 leading-[1.05]" style={{ letterSpacing: "-0.02em", fontOpticalSizing: "auto" }}>
-          Settlement · {artist?.name}
-        </h1>
-        <div className="text-[14px] text-ink-400 mt-3">
-          {formatShowDateFull(show.date)}
-        </div>
+        <Link href={`/shows/${show.id}/interpret`} className="mt-2 shrink-0">
+          <Button variant="helper" size="xl" className="gap-2">
+            <BrainCircuit className="h-6 w-6 rounded-md bg-amber-50 p-1 text-amber-800 ring-1 ring-amber-200/80" />
+            Interpret deal before settling
+          </Button>
+        </Link>
       </div>
 
       {/* Disputed callout */}
@@ -500,10 +510,10 @@ function SupportedSettlement({
   return (
     <>
       {/* Hero number */}
-      <div className="text-center py-10 mb-2">
+      <div className="text-center py-6 mb-2">
         <div className="eyebrow text-[10px] text-ink-400 mb-3">Total to artist</div>
         <div
-          className="text-[72px] font-mono tabular font-bold text-ink-900 leading-none"
+          className="text-[38px] font-mono tabular font-bold text-ink-900 leading-none"
           style={{ letterSpacing: "-0.03em" }}
         >
           {formatMoney(calc.totalToArtist)}

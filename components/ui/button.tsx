@@ -16,6 +16,8 @@ const buttonVariants = cva(
       variant: {
         brand:
           "bg-brand-700 text-white hover:bg-brand-800 shadow-sm shadow-brand-700/15 ring-1 ring-inset ring-brand-800/20",
+        helper:
+          "bg-brand-50 text-brand-800 hover:bg-brand-100 shadow-sm shadow-amber-700/10 ring-2 ring-inset ring-amber-200 hover:ring-amber-300",
         default:
           "bg-ink-900 text-white hover:bg-ink-800 shadow-sm shadow-ink-900/15",
         secondary:
@@ -31,6 +33,7 @@ const buttonVariants = cva(
         default: "h-9 px-4",
         sm: "h-7 px-2.5 text-[12px]",
         lg: "h-10 px-5",
+        xl: "h-12 px-5 text-[14px]",
         icon: "h-9 w-9 px-0",
       },
     },
