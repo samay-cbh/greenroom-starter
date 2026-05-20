@@ -5,10 +5,11 @@
  *
  * This is the existing Greenroom settlement engine. It was built early in
  * the company's life, when most deals were flat guarantees. It currently
- * handles two deal types end-to-end:
+ * handles three deal types end-to-end:
  *
  *   1. flat                 — $X guaranteed, optional sellout bonus
  *   2. percentage_of_gross  — X% of gross, no expense deductions, optional sellout bonus
+ *   3. vs                   — guarantee vs % of net after expenses
  *
  * For both, it reads `bonusesJson` and applies bonuses where it can — but
  * only the structured ones. Bonuses that exist only in `dealNotesFreetext`
@@ -16,8 +17,7 @@
  *
  * It does NOT handle:
  *
- *   - vs deals (guarantee vs % of net, whichever greater)
- *   - percentage_of_net deals (with expense deductions)
+ *   - percentage_of_net deals (without a guarantee floor)
  *   - door deals
  *   - recoups (those flow separately through the settlement record)
  *   - tier ratchets (would need vs-deal support first)
@@ -59,6 +59,8 @@ interface CalcInput {
   // sellout bonuses are reported as "can't determine".
   venueCapacity?: number;
   ticketsSold?: number;
+  additionalAllowableExpenses?: { label: string; amount: number; note?: string }[];
+  grossDeductions?: { label: string; amount: number; note?: string }[];
 }
 
 export function parseBonuses(deal: Deal): Bonus[] {
@@ -80,6 +82,11 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
   const totalExpenses = expenses
     .filter((e) => !e.absorbedByVenue)
     .reduce((sum, e) => sum + e.amount, 0);
+  const additionalAllowableExpenses =
+    input.additionalAllowableExpenses?.reduce((sum, item) => sum + item.amount, 0) ??
+    0;
+  const grossDeductions =
+    input.grossDeductions?.reduce((sum, item) => sum + item.amount, 0) ?? 0;
 
   const tickets =
     ticketsSold ?? ticketSales.reduce((sum, t) => sum + (t.qty ?? 0), 0);
@@ -165,6 +172,77 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
         : `gross × ${deal.percentage} = ${payout.toFixed(2)}`,
       bonusesApplied: bonusResult.applied,
       bonusesNotTriggered: bonusResult.notTriggered,
+    };
+  }
+
+  // ---------- guarantee vs percentage of net ----------
+  if (deal.dealType === "vs") {
+    if (deal.guaranteeAmount == null) {
+      return {
+        supported: false,
+        reason: "Vs deal is missing a guarantee amount.",
+        dealType: deal.dealType,
+      };
+    }
+    if (deal.percentage == null) {
+      return {
+        supported: false,
+        reason: "Vs deal is missing an artist percentage.",
+        dealType: deal.dealType,
+      };
+    }
+
+    const actualExpensePool = totalExpenses + additionalAllowableExpenses;
+    const allowableExpenses =
+      deal.expenseCap != null
+        ? Math.min(actualExpensePool, deal.expenseCap)
+        : actualExpensePool;
+    const netAfterExpenses =
+      grossBoxOffice - totalFees - grossDeductions - allowableExpenses;
+    const artistShare = netAfterExpenses * deal.percentage;
+    const artistShareWins = artistShare >= deal.guaranteeAmount;
+    const payout = Math.max(deal.guaranteeAmount, artistShare);
+    const percentLabel = `${(deal.percentage * 100).toFixed(0)}%`;
+
+    return {
+      supported: true,
+      grossBoxOffice,
+      netBoxOffice,
+      totalExpenses: actualExpensePool,
+      totalToArtist: payout,
+      steps: [
+        { label: "Gross box office", value: grossBoxOffice },
+        { label: "Platform fees", value: -totalFees },
+        ...(input.grossDeductions ?? []).map((deduction) => ({
+          label: deduction.label,
+          value: -deduction.amount,
+          note: deduction.note,
+        })),
+        {
+          label: "Allowable expenses",
+          value: -allowableExpenses,
+          note:
+            deal.expenseCap != null && actualExpensePool > deal.expenseCap
+              ? `capped at ${formatPlainMoney(deal.expenseCap)} from ${formatPlainMoney(actualExpensePool)}`
+              : undefined,
+        },
+        { label: "Net after expenses", value: netAfterExpenses },
+        {
+          label: `Artist share (${percentLabel} of net)`,
+          value: artistShare,
+        },
+        { label: "Guarantee floor", value: deal.guaranteeAmount },
+        {
+          label: `Payout — greater of ${artistShareWins ? "artist share" : "guarantee"}`,
+          value: payout,
+          note: artistShareWins
+            ? "Artist share exceeds the guarantee floor."
+            : "Guarantee floor exceeds the artist share.",
+        },
+      ],
+      finalFormula: `max(${formatPlainMoney(deal.guaranteeAmount)}, ${percentLabel} × ${formatPlainMoney(netAfterExpenses)}) = ${formatPlainMoney(payout)}`,
+      bonusesApplied: [],
+      bonusesNotTriggered: [],
     };
   }
 
@@ -258,4 +336,11 @@ function applyBonuses(
     notTriggered,
     totalApplied: applied.reduce((s, b) => s + b.amount, 0),
   };
+}
+
+function formatPlainMoney(amount: number) {
+  return `$${amount.toLocaleString("en-US", {
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
