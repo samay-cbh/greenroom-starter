@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenroom 2.0: The Executable Settlement Ledger</title>
+    <style>
+        /* Bauhaus / Jony Ive Inspired Design System */
+        :root {
+            /* Colors */
+            --bg-base: #fbfbfb;
+            --bg-surface: #ffffff;
+            --bg-panel: #f4f4f5;
+            --text-main: #111111;
+            --text-muted: #555555;
+            --text-faint: #999999;
+            --border-light: #e4e4e7;
+            --border-hard: #111111;
+            
+            /* Functional Accents - Bauhaus primary hues */
+            --accent-blue: #2563eb;
+            --accent-orange: #ea580c;
+            --accent-green: #16a34a;
+            --accent-red: #dc2626;
+
+            /* Typography */
+            --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Helvetica Neue", sans-serif;
+            --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", "Menlo", monospace;
+            
+            /* Layout */
+            --sidebar-w: 260px;
+            --max-w: 1200px;
+            --radius-sm: 4px;
+            --radius-md: 8px;
+        }
+
+        /* Base Resets */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: var(--font-sans);
+            color: var(--text-main);
+            background-color: var(--bg-base);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4 { font-weight: 500; letter-spacing: -0.02em; color: var(--text-main); }
+        h1 { font-size: 2.5rem; line-height: 1.1; margin-bottom: 0.5rem; }
+        h2 { font-size: 1.5rem; margin-top: 3.5rem; padding-bottom: 0.75rem; border-bottom: 2px solid var(--text-main); margin-bottom: 1.5rem; }
+        h3 { font-size: 1.1rem; margin-top: 2rem; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+        p { margin-bottom: 1.25rem; }
+        ul, ol { margin-bottom: 1.5rem; padding-left: 1.25rem; }
+        li { margin-bottom: 0.5rem; }
+        a { color: var(--accent-blue); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+        a:hover { border-bottom-color: var(--accent-blue); }
+        strong { font-weight: 600; }
+
+        /* Layout Structure */
+        .app-container {
+            display: flex;
+            max-width: var(--max-w);
+            margin: 0 auto;
+            padding: 3rem 2rem;
+            gap: 4rem;
+        }
+
+        /* Sticky Sidebar */
+        .sidebar {
+            width: var(--sidebar-w);
+            flex-shrink: 0;
+            position: sticky;
+            top: 3rem;
+            height: calc(100vh - 6rem);
+            overflow-y: auto;
+            padding-right: 1rem;
+            border-right: 1px solid var(--border-light);
+        }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--border-light); }
+        
+        .toc-list { list-style: none; padding: 0; }
+        .toc-list li { margin-bottom: 0.5rem; }
+        .toc-list a {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            padding: 0.25rem 0;
+            transition: color 0.2s ease;
+        }
+        .toc-list a:hover, .toc-list a.active {
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        /* Main Content */
+        .content {
+            flex-grow: 1;
+            min-width: 0; /* prevents flex blowout */
+            padding-bottom: 6rem;
+        }
+
+        /* Header / Exec Block */
+        .exec-header {
+            margin-bottom: 4rem;
+        }
+        .status-badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            background: var(--text-main);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            margin-bottom: 1.5rem;
+            letter-spacing: 0.05em;
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-light);
+        }
+        .meta-label { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-faint); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .meta-value { font-size: 0.9rem; font-weight: 500; }
+
+        /* UI Primitives */
+        .card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .card-dark {
+            background: var(--text-main);
+            color: white;
+            border: none;
+        }
+        .card-dark h3, .card-dark p, .card-dark li { color: #e5e5e5; }
+        
+        .callout {
+            padding: 1.25rem 1.5rem;
+            background: var(--bg-panel);
+            border-left: 3px solid var(--text-main);
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+        }
+        .callout-insight { border-left-color: var(--accent-orange); }
+        .callout-tech { border-left-color: var(--accent-blue); font-family: var(--font-mono); font-size: 0.85rem; }
+
+        .mono-highlight {
+            font-family: var(--font-mono);
+            background: var(--bg-panel);
+            padding: 0.1rem 0.3rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.85em;
+            border: 1px solid var(--border-light);
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+            font-size: 0.85rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+        th { font-weight: 600; color: var(--text-muted); background: var(--bg-panel); }
+        
+        /* Code & Artifact Blocks */
+        details.artifact-drawer {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        details.artifact-drawer summary {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            background: var(--bg-panel);
+            user-select: none;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+        }
+        details.artifact-drawer summary::before {
+            content: "+";
+            display: inline-block;
+            width: 20px;
+            font-weight: bold;
+        }
+        details.artifact-drawer[open] summary::before { content: "−"; }
+        details.artifact-drawer pre {
+            margin: 0;
+            padding: 1.5rem;
+            background: #111;
+            color: #f1f1f1;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .iframe-container {
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            background: var(--bg-panel);
+        }
+
+        /* Flex Utilities */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+
+        /* Responsive */
+        @media (max-width: 960px) {
+            .app-container { flex-direction: column; padding: 1.5rem; gap: 2rem; }
+            .sidebar { width: 100%; height: auto; position: relative; top: 0; border-right: none; border-bottom: 1px solid var(--border-light); padding-bottom: 1rem; }
+            .toc-list { display: flex; flex-wrap: wrap; gap: 1rem; }
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* Print */
+        @media print {
+            .sidebar { display: none; }
+            .app-container { padding: 0; max-width: 100%; display: block; }
+            .content { max-width: 100%; padding: 0; }
+            body { background: white; font-size: 10pt; }
+            h2 { page-break-after: avoid; }
+            .card, .callout { break-inside: avoid; border: 1px solid #ccc; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Navigation -->
+    <aside class="sidebar">
+        <nav>
+            <ul class="toc-list">
+                <li><a href="#header">Title & Executive Summary</a></li>
+                <li><a href="#context">1. Why This Work Matters</a></li>
+                <li><a href="#problem-space">2. Problem Space & Domain</a></li>
+                <li><a href="#process">3. Process & Discovery</a></li>
+                <li><a href="#eureka">4. The Core Insight</a></li>
+                <li><a href="#user-framing">5. User-Centered Framing</a></li>
+                <li><a href="#narrative">6. Product Narrative</a></li>
+                <li><a href="#prd">7. PRD: Final Direction</a></li>
+                <li><a href="#design-choices">8. Design Choices & Rationale</a></li>
+                <li><a href="#tradeoffs">9. Trade-offs & Scope Cuts</a></li>
+                <li><a href="#validation">10. Validation Plan</a></li>
+                <li><a href="#roadmap">11. What I'd Ship Next</a></li>
+                <li><a href="#technical">12. Technical & Data Depth</a></li>
+                <li><a href="#comparative">13. Comparative Thinking</a></li>
+                <li><a href="#artifacts">14. Github Repo & Figjam</a></li>
+                <li><a href="#closing">15. Closing Memo & Loom Video Demo</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Content -->
+    <main class="content">
+        
+        <!-- Header -->
+        <header id="header" class="exec-header">
+            <span class="status-badge">Executive Strategy & PRD</span>
+            <h1>Greenroom 2.0: The Executable Ledger</h1>
+            <p style="font-size: 1.25rem; color: var(--text-muted);">
+                Transitioning from a passive CMS to a relationship intelligence and financial operating system for live music.
+            </p>
+            
+            <div class="meta-grid">
+                <div>
+                    <div class="meta-label">Author</div>
+                    <div class="meta-value">Prithvi Rey</div>
+                </div>
+                <div>
+                    <div class="meta-label">Date</div>
+                    <div class="meta-value">May 2026</div>
+                </div>
+                <div>
+                    <div class="meta-label">Focus Area</div>
+                    <div class="meta-value">Settlement, Intelligence & Provenance</div>
+                </div>
+            </div>
+
+            <div class="callout" style="margin-top: 2rem; background: var(--text-main); color: white; border-left: 4px solid var(--accent-orange);">
+                <strong>One-Line Framing:</strong> We are replacing a brittle, read-only calculator with an interactive, PR-style settlement workspace—enforcing caps natively, establishing receipt provenance, and tracking deal versions to eliminate 2 a.m. signature chaos.
+            </div>
+        </header>
+
+        <!-- Section 1 -->
+        <section id="context">
+            <h2>1. Why This Work Matters</h2>
+            <p>Greenroom is an $8.1M ARR SaaS winning on platform completeness, but fundamentally failing at the most critical trust junction: <strong>financial settlement</strong>.</p>
+            <p>When money moves, clarity is the only feature that matters. Currently, only 18% of our customers use our settlement tool. Our database forensics revealed why: the system's hardcoded logic fails on 63% of deals (Vs Deals, % of Net). More dangerously, the system silently leaks margin—our data showed <span class="mono-highlight">222 shows (44%)</span> settled with expenses exceeding their contractual cap, resulting in <strong>$175,664</strong> of unchecked overages absorbed by venues.</p>
+            <p>If left unaddressed, this product degrades from a system of record into a liability. Users are retreating to Google Sheets for math and email for disputes. This feature slice reclaims the financial payload, protects venue margins, and restores institutional trust.</p>
+        </section>
+
+        <div class="bg-white rounded-lg border border-stone-200 overflow-hidden mb-6">
+                    <table class="mb-0">
+                        <thead class="bg-stone-50">
+                            <tr>
+                                <th>Metric</th>
+                                <th>Value</th>
+                                <th>What It Means</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-stone-700">
+                            <tr>
+                                <td class="font-medium">Tool adoption rate</td>
+                                <td>18%</td>
+                                <td>82% of users settle outside the product (Google Sheets).</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Deals tool cannot settle</td>
+                                <td>63%</td>
+                                <td>Vs deals, % of net, door deals are fundamentally broken.</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Expense cap breaches</td>
+                                <td>44%</td>
+                                <td>222 shows with overages—none flagged systematically.</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium text-red-700">Total silent overage</td>
+                                <td class="font-mono text-red-700">$175,664</td>
+                                <td>Margin passed through to artists without detection.</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Disputed recoup value</td>
+                                <td class="font-mono">$8,083</td>
+                                <td>Frozen payments from unresolved agent disputes.</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">TM Sign-off method</td>
+                                <td>👍</td>
+                                <td>Signatures are currently collected via emoji in a freetext field.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+        <!-- Section 2 -->
+        <section id="problem-space">
+            <h2>2. Problem Space & Product Understanding</h2>
+            <p>Live venue settlement is not a clean, synchronous accounting event. It is a messy, relational negotiation executed by exhausted people in a dark back office.</p>
+            <p>The current architecture treats settlement as a <strong>static database read operation</strong>. But for Mariana (the Lead Booker), settlement is a <strong>high-stakes write operation</strong>. She is navigating ambiguous 80-word email agreements, tracking undocumented expenses, and defending her venue's margin.</p>
+            
+            <div class="grid-2">
+                <div class="card">
+                    <h3>The Ghost Deal</h3>
+                    <p>Deals are amended via phone calls days before a show. Bookers note this in free-text, but structured DB fields remain stale. The UI actively lies about the math.</p>
+                </div>
+                <div class="card">
+                    <h3>The Dual-Audience</h3>
+                    <p>The Tour Manager signs off on physical cash at 2 a.m., but the Agent audits contract caps on Monday morning. One monolithic "Disputed" status cannot model this reality.</p>
+                </div>
+            </div>
+                <p class="text-stone-700 mb-6 leading-relaxed">
+                    I entered this domain looking at standard SaaS metrics, but quickly realized settlement is not a standard SaaS workflow. It is a high-stakes, adversarial negotiation executed by exhausted people.
+                </p>
+                <div class="grid-2">
+                    <div class="card">
+                        <h3>The "Vs Deal" Complexity</h3>
+                        <p class="text-sm text-stone-600">63% of deals are "Vs deals" (e.g., "$3500 vs 85% of net"). Current DB models use rigid `guarantee` and `percentage` columns, failing entirely when dynamic caps or sliding scales are introduced via free-text deal notes.</p>
+                    </div>
+                    <div class="card">
+                        <h3>The Zero Provenance Trap</h3>
+                        <p class="text-sm text-stone-600">The UI operates on trust, not proof. A $300 hospitality line item is just a number. When disputed by an agent on Monday, the venue has no embedded cryptographic or receipt-based proof, leading to margin erosion.</p>
+                    </div>
+                </div>
+        </section>
+
+        <!-- Section 3 -->
+        <section id="process">
+            <h2>3. My Process & Discovery</h2>
+            <p>I did not start by drawing screens. I started by tearing down the data architecture to trace the symptom (spreadsheet abandonment) to its root cause.</p>
+            <ol>
+                <li><strong>Ethnographic Synthesis:</strong> I mapped the differing incentives. Mariana needs margin defense. Diego (TM) needs verification and speed. Sarah (Agent) needs provenance and audit trails.</li>
+                <li><strong>Database Forensics (SQLite):</strong> I executed deep queries on the starter repo data. I didn't just ask <em>what</em> was breaking; I asked <em>where the money was leaking</em>. This led to the discovery of the "Door Deal Bloodbath" (average -$983 loss for venues).</li>
+                <li><strong>State Machine Analysis:</strong> I discovered negative timestamps causing JS runtime crashes. This proved our <code>status</code> column suffered from race conditions (shows being signed and disputed simultaneously).</li>
+                <li><strong>FigJam Hypothesis Mapping:</strong> I mapped the current flow (rigid DB &rarr; failed math &rarr; Sheet fallback &rarr; Email dispute) against an ideal operational flow (Pre-flight Triage &rarr; PR-style Review &rarr; Immutable Sign-off).</li>
+            </ol>
+            <div class="callout callout-insight">
+                <strong>Crucial Discovery:</strong> The data revealed that <strong>Hospitality and Marketing</strong> were the most disputed categories ($12k+ tied up). Building a better calculator wasn't enough; we had to build an evidence layer (mandatory receipt uploads).
+            </div>
+        </section>
+
+        <!-- Section 4 -->
+        <section id="eureka">
+            <h2>4. The Core Insight</h2>
+            <p>The turning point in the product strategy came from a single realization:</p>
+            <div style="padding: 2rem; background: var(--text-main); color: white; border-radius: var(--radius-md); margin: 1.5rem 0; text-align: center;">
+                <h3 style="color: var(--accent-orange); font-size: 1.25rem; margin-bottom: 0.5rem;">We were forcing a dynamic financial negotiation into a static CMS.</h3>
+                <p style="margin: 0; font-size: 1.1rem; font-weight: 300;">Mariana wasn't using spreadsheets because they were prettier. She used them because a spreadsheet <em>shows its work</em>. It is legible, defensible, and non-destructive.</p>
+            </div>
+            <p>Greenroom's UI was a "Black Box" that spit out a final <code>total_to_artist</code> number. The solution wasn't generic dashboards. The solution was an <strong>Executable Ledger</strong>—an exact-input interface that explicitly writes out the conditional logic of a contract on the screen, accompanied by an intelligent triage system to prevent disputes before they happen.</p>
+        </section>
+
+        <!-- Section 5 -->
+        <section id="user-framing">
+            <h2>5. User-Centered Framing</h2>
+            <p>Designing for a 2 a.m. environment requires <strong>Calm Technology</strong>. Cognitive load must be zero. Trust must be absolute.</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Persona</th>
+                        <th>Core Anxiety</th>
+                        <th>What "Good" Looks Like (HCI Requirement)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Mariana</strong> (Booker)</td>
+                        <td>Absorbing out-of-contract expenses.</td>
+                        <td><em>Traceability & Guardrails.</em> Exact inputs. Progressive disclosure of cap breaches (inline glowing warnings, not blocking modals).</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Diego</strong> (TM)</td>
+                        <td>Signing a bad deal under duress.</td>
+                        <td><em>Reviewability.</em> PR-style settlement view. A clear "Math Waterfall" proving how the total was derived.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sarah</strong> (Agent)</td>
+                        <td>Venue padding subjective expenses.</td>
+                        <td><em>Provenance.</em> Every expense >$100 has a clickable receipt link validating the claim.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Section 6 -->
+        <section id="narrative">
+            <h2>6. Product Narrative</h2>
+            <p>The user journey shifts from reactive data-entry to proactive relationship operations.</p>
+            <ul style="list-style-type: none; padding: 0;">
+                <li style="margin-bottom: 1rem;"><strong>1. Intelligence (<code>/artists</code>):</strong> Before booking, Mariana checks the Artist Health Score and Agent Dispute Risk to structure a safe deal.</li>
+                <li style="margin-bottom: 1rem;"><strong>2. Triage (<code>/shows</code>):</strong> On Wednesday, Mariana reviews the "Needs Attention" column, catching unverified expense caps before the show.</li>
+                <li style="margin-bottom: 1rem;"><strong>3. Preparation (<code>/shows/[id]</code>):</strong> Show day. Expenses are entered with receipt proofs. Phone amendments are logged cleanly in the Deal Version history.</li>
+                <li style="margin-bottom: 1rem;"><strong>4. Execution (<code>/shows/[id]/settle</code>):</strong> 2:00 AM. Mariana and Diego review the PR-style calculation. They comment, adjust, and confirm the payout with total mathematical confidence.</li>
+            </ul>
+        </section>
+
+        <!-- Section 7 -->
+        <section id="prd">
+            <h2>7. PRD: Final Product Direction</h2>
+            <p>Based directly on the final agentic development prompt, here is the functional direction for the core routes:</p>
+
+            <div class="card">
+                <h3>A. The Relationship Intelligence Layer (<code>/artists</code>)</h3>
+                <p><strong>Intent:</strong> Transform a flat directory into an operational CRM.</p>
+                <ul>
+                    <li><strong>Controls:</strong> Sort by Health Score, Revenue, Dispute Risk. Filter by Agency.</li>
+                    <li><strong>Artist Profile Cards:</strong> Compact modules detailing Booking History (deal mix, payout avg, expense compliance rate).</li>
+                    <li><strong>Agent Intelligence:</strong> Surface the "Agent Dispute Risk" (e.g., warning if dealing with a historically combative agent).</li>
+                    <li><strong>Action:</strong> <em>"Book Again"</em> shortcut pre-filling deal terms based on past success.</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>B. The Triage Dashboard (<code>/shows</code>)</h3>
+                <p><strong>Intent:</strong> Shift from a chron-list to an operations command surface.</p>
+                <ul>
+                    <li><strong>Top Dashboard Strip:</strong> Low-noise metrics (Unsettled count, disputed count, total pending payouts).</li>
+                    <li><strong>Three-Column Triage:</strong> Group shows into <em>This Weekend</em>, <em>Needs Attention</em> (e.g., overdue signatures), and <em>Unresolved</em> (stale disputes).</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>C. The Deal Workspace & Calculator Tile (<code>/shows/[id]</code>)</h3>
+                <p><strong>Intent:</strong> Establish the source of truth for deal versioning and gross logic.</p>
+                <ul>
+                    <li><strong>Deal Versioning:</strong> An immutable timeline showing what changed, when, and who changed it (e.g., "Phone call: Reduced guarantee to $6000").</li>
+                    <li><strong>Expense Proofs:</strong> Expenses require a description and receipt upload link.</li>
+                    <li><strong>Gross Math Panel:</strong> Explicitly display "Fees In" vs "Fees Out" to resolve basis ambiguity.</li>
+                    <li><strong>The Bauhaus Calculator Tile:</strong> In the right-side empty space, an elegant, Teenage Engineering-inspired working calculator. Users can modify assumptions locally, test mathematical logic like Excel, and push the confirmed result to the settlement route.</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>D. The Collaborative Settlement (<code>/shows/[id]/settle</code>)</h3>
+                <p><strong>Intent:</strong> A PR-style review page to safely audit and execute the payout.</p>
+                <ul>
+                    <li><strong>Invoice / Math Waterfall:</strong> A cascading vertical breakdown showing exactly how the "Total to Artist" was derived (Gross &rarr; Deductions &rarr; Winning Share &rarr; Bonus).</li>
+                    <li><strong>Collaboration Model:</strong> Agents/TMs can leave comments on specific sections, flag disputes, or request changes without breaking the underlying DB data.</li>
+                    <li><strong>Confirmation Flow:</strong> Clear reviewer name input and "Confirm Payout" action.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Section 8 -->
+        <section id="design-choices">
+            <h2>8. Design & HCI Rationale</h2>
+            <p>The visual language treats the software as a high-end operational instrument, not a generic SaaS template.</p>
+            <ul>
+                <li><strong>The Bauhaus Calculator:</strong> Added to the show page right-panel. By designing this like precision hardware (stark contrasts, clear input affordances, zero decorative fluff), we induce a psychological feeling of accuracy. It serves as a safe "sandbox" to test deal math.</li>
+                <li><strong>Tabular Numerals & Monospace:</strong> All financial data utilizes monospace fonts. This ensures decimal alignment, speeds up visual scanning at 2 a.m., and communicates immutability.</li>
+                <li><strong>Information Density:</strong> The UI groups related variables tightly (e.g., Expenses + Receipts). We avoided oversized hero metrics in favor of compact, scannable triage columns.</li>
+                <li><strong>Explicit Traceability:</strong> Instead of hiding the math, the UI writes it out: <code>MAX(2631, 90% * (Gross - Fees - Allowed Expenses))</code>. This acts as an instant conversational defense for Mariana.</li>
+            </ul>
+        </section>
+
+        <!-- Section 9 -->
+        <section id="tradeoffs">
+            <h2>9. Trade-offs & What I Cut</h2>
+            <p>To ship a high-confidence V1 that immediately stops margin leakage, severe scoping decisions were made:</p>
+            
+            <div class="card" style="background: var(--danger-bg); border-color: var(--danger-text);">
+                <h4 style="color: var(--danger-text);">Intentional Cuts</h4>
+                <ul>
+                    <li><strong>Full Spreadsheet Calculation Engine:</strong> We built a constrained Bauhaus calculator tile, but intentionally did <em>not</em> build a full Excel clone. Full spreadsheets invite unstructured data chaos. We accept the risk that ultra-complex 4-tier deals may still require external tools.</li>
+                    <li><strong>Deep Backend Permissions (RBAC):</strong> V1 focuses on UI-level PR-style reviews. A full backend granular permissions system (TM vs Agent vs Booker edit rights) was cut to speed up delivery.</li>
+                    <li><strong>Automated Payment Rails:</strong> While the "Weekend Liquidity Gap" is real, integrating Stripe Treasury for automated payouts was scoped out. V1 handles the math consensus; the physical wire transfer remains a manual operational step.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Section 10 -->
+        <section id="validation">
+            <h2>10. Validation Plan</h2>
+            <p>I would validate this slice through strict operational and behavioral instrumentation:</p>
+            <ul>
+                <li><strong>Operational Metric:</strong> Track the dollar amount of "Venue Absorbed Losses" captured by the new cap compliance warnings. <em>Target: Zero silent cap breaches in 30 days.</em></li>
+                <li><strong>Behavioral Metric:</strong> Measure adoption of the <code>/shows/[id]/settle</code> tool for Vs Deals. <em>Target: Increase in-app settlement from 18% &rarr; 60%+.</em></li>
+                <li><strong>Qualitative Usability:</strong> Shadow Mariana during a Friday midnight settlement. Observe the <em>Time-to-Sign-off</em>. <em>Target: Reduce negotiation time from 45 mins &rarr; 10 mins using the new PR-style view.</em></li>
+                <li><strong>Dispute Reduction:</strong> Track post-settlement comments/disputes. <em>Target: 50% drop in agent-initiated Monday emails due to upfront receipt provenance.</em></li>
+            </ul>
+        </section>
+
+        <!-- Section 11 -->
+        <section id="roadmap">
+            <h2>11. What I'd Ship Next</h2>
+            <p>The roadmap sequences from core utility to ecosystem automation.</p>
+            <ol>
+                <li><strong>Immediate (Q2): Partial Resolution Workflow.</strong> Allow undisputed funds (base guarantee) to be confirmed and wired immediately, isolating only the disputed delta (e.g., a $400 hospitality charge) in a separate resolution queue.</li>
+                <li><strong>Medium-Term (Q3): Advance Data Intake Portal.</strong> Shift data-entry labor by sending a secure web-form to Tour Managers weeks prior, auto-populating backline and hospitality requests into Greenroom's DB.</li>
+                <li><strong>Long-Term (Q4): The FinTech Clearing Hub.</strong> Solve the weekend cashflow gap by allowing the venue to trigger an instant payout to a TM debit card via embedded finance rails.</li>
+            </ol>
+        </section>
+
+        <!-- Section 12 -->
+        <section id="technical">
+            <h2>12. Technical, Data & Systems Depth</h2>
+            <p>This implementation requires shifting from a mutable CMS to an immutable FinTech data architecture.</p>
+            
+            <div class="callout callout-tech">
+                <strong>Data Modeling Adjustments:</strong>
+                <ul>
+                    <li><strong><code>deal_versions</code> table:</strong> Required for the timeline UI. <code>(id, show_id, changed_at, changed_by, old_payload, new_payload, note)</code>.</li>
+                    <li><strong><code>expenses</code> update:</strong> Add <code>receipt_url</code> (string) and constrain <code>description</code> to be <code>NOT NULL</code> if <code>amount &gt; 100</code>.</li>
+                    <li><strong><code>settlement_reviews</code> table:</strong> To support the PR-style collaboration flow without overwriting the base settlement status. Tracks comments, approvals, and requested changes.</li>
+                </ul>
+            </div>
+            <p><strong>System Assumptions:</strong> The frontend relies heavily on client-side state for the "Bauhaus Calculator" to ensure zero-latency re-renders while testing deal math. We assume existing backend file-upload infrastructure can be repurposed for the <code>receipt_url</code> attachments.</p>
+        </section>
+
+        <!-- Section 13 -->
+        <section id="comparative">
+            <h2>13. Comparative Thinking</h2>
+            <p>Generic SaaS CRM dashboards (like Salesforce) fail here because they treat a booking as a "won deal." In live music, booking the show is 10% of the work; executing the settlement is 90%.</p>
+            <p>Competitors like Prism.fm offer robust event lifecycle tracking, but often feel like heavy ERPs. They digitize the process but still largely rely on traditional form views. By framing the settlement page as a <strong>Pull Request Review</strong> (inspired by GitHub) combined with a <strong>Cryptographic Ledger</strong> (inspired by Carta), we differentiate Greenroom. We aren't just logging numbers; we are enforcing financial guardrails and managing multi-party trust programmatically.</p>
+        </section>
+
+        <!-- Section 14 -->
+        <section id="artifacts">
+            <h2>14. Github Repo & Figjam</h2>
+            
+            <div class="grid-2">
+                <a href="https://www.figma.com/board/7euo9tZ9nOZvkajmx12mry/clipboard?node-id=0-1&t=aBzPPIKv1RkyDYwe-1" target="_blank" class="card" style="display: block; text-align: center;">
+                    <strong style="color: var(--accent-blue);">FigJam Exploration Board</strong>
+                    <p style="font-size: 0.8rem; margin: 0.5rem 0 0;">View hypotheses, personas & flows</p>
+                </a>
+                <a href="https://github.com/prithvi-jpg/greenroom-starter.git" target="_blank" class="card" style="display: block; text-align: center;">
+                    <strong style="color: var(--accent-blue);">GitHub Repository</strong>
+                    <p style="font-size: 0.8rem; margin: 0.5rem 0 0;">Greenroom-starter source code</p>
+                </a>
+            </div>
+
+            <!-- FigJam Embed -->
+            <div class="iframe-container">
+                <iframe style="border: none; width: 100%; height: 450px;" src="https://embed.figma.com/board/7euo9tZ9nOZvkajmx12mry/clipboard?node-id=0-1&embed-host=share" allowfullscreen></iframe>
+            </div>
+
+            <!-- Agentic Prompt Embed -->
+            <details class="artifact-drawer">
+                <summary>View Final Agentic Development Prompt</summary>
+                <pre><code>You are a senior product engineer, staff-level frontend architect, and design systems lead working directly inside my currently open GitHub repository and local web app.
+
+Your mission:
+Understand the existing product, inspect the open repo, inspect the running web app, and make production-quality changes across the app so the final result feels native to the product rather than AI-generated or bolted on.
+
+You must execute end-to-end:
+- repo discovery
+- architecture understanding
+- design system alignment
+- UX planning
+- implementation
+- responsive behavior
+- state handling
+- data modeling adjustments if needed
+- component refactors
+- empty/loading/error states
+- testing
+- linting/formatting
+- final review notes
+
+You are not here to create mockups only. You are here to ship working code in the existing app.
+
+OPERATING MODE
+
+1. Start by understanding before changing anything.
+2. Read the repo structure, package files, routing, UI primitives, design tokens, shared components, models/types, mock data, API helpers, and existing patterns.
+3. Inspect the currently open pages and understand how the current UI is built.
+4. Reuse existing components, styles, and conventions wherever possible.
+5. Do not introduce a parallel design language.
+6. Plan first, then implement.
+7. Keep changes incremental, coherent, and production-grade.
+8. If a requirement is ambiguous, choose the most product-sensible option that matches the existing codebase and document the assumption in your final summary.
+9. Prefer maintainable abstractions over quick hacks.
+10. Preserve existing functionality unless a change explicitly requires replacing it.
+
+CORE EXECUTION RULES
+
+- Think deeply before coding.
+- Create a clear implementation plan before editing files.
+- Audit existing routes, components, styles, and data contracts first.
+- Prefer extending existing types/components over creating duplicate ones.
+- Keep page hierarchy compact, information-dense, and premium.
+- Avoid generic SaaS visuals or “AI slop” UI.
+- Follow the current product’s aesthetic, spacing, typography, colors, and interaction style.
+- If design tokens exist, use them.
+- If a component library exists, use it consistently.
+- If there are existing cards, panels, tables, filters, charts, drawers, or sheets, build on top of them.
+- Maintain accessibility, keyboard navigation, focus states, and responsive usability.
+- Run formatting, typecheck, lint, and tests where available.
+- Fix issues caused by your changes.
+- Do not leave TODOs unless absolutely unavoidable.
+
+PRODUCT / UX NORTH STAR
+
+This app should feel like a relationship intelligence and settlement operating system for live music bookings, not a generic CRM and not a generic dashboard.
+
+The product should help a user quickly answer:
+- Who should I book again?
+- Which deals are risky?
+- What is unsettled?
+- Which artists and agents are healthy relationships?
+- Where are disputes, leaks, or ambiguous terms?
+- What changed in a deal over time?
+- Can I confidently settle and pay this artist?
+
+Design tone:
+- premium music-business ops software
+- calm, sharp, editorial, intelligent
+- compact but readable
+- data-rich without feeling cluttered
+- strong information hierarchy
+- sophisticated, human, and operational
+- should feel custom-designed for the workflow
+
+Avoid:
+- oversized hero-dashboard KPIs
+- fluffy marketing sections
+- generic gradient cards
+- loud neon fintech aesthetic
+- unnecessary decorative UI
+- anything that looks templated
+
+GLOBAL DELIVERY REQUIREMENTS
+
+For every page you touch:
+- preserve or improve mobile responsiveness
+- add empty states, loading states, and edge-case handling
+- ensure text truncation is handled elegantly
+- use tabular numerals where financial data appears
+- ensure filters/sorts are real and visible in the UI
+- ensure actions are discoverable
+- ensure status states are legible at a glance
+- prefer scannability over verbosity
+
+WORKFLOW TO FOLLOW
+
+PHASE 1 — DISCOVER
+- Inspect the repo and identify framework, routing, component system, styling approach, charting libs, state management, and data models.
+- Find all files related to:
+  - /artists
+  - /shows
+  - /shows/[show_id]
+  - /shows/[show_id]/settle
+- Identify existing artist, show, deal, settlement, dispute, expense, receipt, and agent data structures.
+- Identify whether there is already support for:
+  - sorting/filtering
+  - charts
+  - comments/activity timelines
+  - version history
+  - file attachments / receipts
+  - settlement calculation
+  - review/approval patterns
+- Inspect the currently running UI and compare implementation against requirements.
+
+PHASE 2 — PLAN
+Before editing, produce a concise implementation plan that includes:
+- files likely to change
+- new components/hooks/types needed
+- data model additions
+- UX decisions and assumptions
+- page-by-page change summary
+Then execute.
+
+PHASE 3 — IMPLEMENT
+Ship the changes directly in code.
+
+PHASE 4 — VALIDATE
+Run:
+- install/build steps if needed
+- typecheck
+- lint
+- tests if present
+- app build
+Fix issues.
+
+PHASE 5 — REVIEW
+Provide a final summary:
+- what changed
+- assumptions made
+- files changed
+- validation run
+- follow-up recommendations
+
+PAGE REQUIREMENTS
+
+==================================================
+1) /artists
+==================================================
+
+Current issue:
+The Artists page only has a “frequent bucket list” style view and is too shallow.
+
+Goal:
+Turn /artists into a relationship intelligence layer.
+
+TOP-LEVEL CONTROLS
+Add a polished, compact control bar with:
+
+Sort by:
+- Frequency
+- Health Score
+- Revenue
+- Dispute Risk
+- Last Booked
+
+Filter:
+- All agencies
+- High dispute risk
+- Needs rebook
+- Specific agency filters such as Wasserman
+
+Requirements:
+- Sorting and filtering must be functional, not decorative.
+- Make the control bar feel native to the product.
+- Ensure it works well on desktop and mobile.
+- If the codebase supports query params, sync sort/filter state into the URL.
+
+ARTIST CARD REDESIGN
+Transform each artist card into a compact relationship intelligence profile.
+
+Each card should answer:
+- Who is this artist?
+- Who is the agent / agency?
+- How often have we booked them?
+- What kind of deals have we done?
+- How much do they usually make?
+- Are expenses clean?
+- Any disputes?
+- What happened on the last deal?
+- Should we book them again and under what structure?
+
+Each artist card should include sections similar to:
+
+HEADER
+- artist name
+- genre
+- agent name
+- agency
+- optional relationship badge / status badge
+
+BOOKING HISTORY
+- number of shows
+- time window (e.g. over 24 months)
+- average payout
+- deal mix with percentages across deal types
+- expense compliance rate
+- dispute history summary
+- last deal summary
+
+ARTIST HEALTH
+- health score out of 5
+- 2–4 short intelligence statements such as:
+  - strong repeat relationship
+  - no disputes / dispute noted
+  - reliable or poor expense compliance
+  - recommended next deal structure based on history
+
+INTELLIGENCE MODULES TO ADD
+Per artist, support:
+- deal type distribution chart
+- average payout by deal type
+- expense history with cap compliance rate
+- agent relationship panel:
+  - agent name
+  - agency
+  - dispute count
+  - last disputed amount
+  - agent notes
+- “Book again” shortcut
+
+BOOK AGAIN ACTION
+Add a “Book again” action that prefills the deal entry flow with the last negotiated terms as a starting point.
+If there is already a deal entry form route, wire into it.
+If no direct prefill mechanism exists, implement a sensible route/state strategy.
+
+HEALTH SCORE
+Implement a transparent health score model using available data.
+Use factors like:
+- repeat history
+- recency
+- dispute count/severity
+- expense compliance
+- booking success / completion
+- payout reliability
+Do not overcomplicate it; keep it explainable in code.
+
+VISUAL / UX NOTES
+- Cards should stay compact and scannable.
+- Data-dense, not bloated.
+- Use strong typography hierarchy and grouped information.
+- Use charts sparingly and only where they improve understanding.
+- Show risk with restraint.
+- Make this page feel like a relationship operating surface, not a contact list.
+
+==================================================
+2) /shows
+==================================================
+
+Goal:
+Keep the show list/timeline as the main highlight, but elevate the top dashboard strip with better operational metrics.
+
+TOP DASHBOARD STRIP
+Add a compact dashboard summary derived from the shows table and related data.
+Include metrics such as:
+- number of shows
+- settlements paid to artists
+- unsettled count
+- disputed settlements count
+- unsigned settlements
+- upcoming shows
+- overdue settlement actions
+- total artist payouts
+- average payout
+- gross / net / estimated totals if derivable
+- any other useful low-noise metrics supported by the current data model
+
+Important:
+- This summary should look good and be useful, but should not dominate the page.
+- It must occupy modest space.
+- The main visual priority remains the show list / timeline surface.
+
+MAIN HIGHLIGHT: TRIAGE SURFACE
+The primary content should become a triage-oriented list organized into three time/action zones:
+
+- THIS WEEKEND
+- NEEDS YOUR ATTENTION
+- UNRESOLVED
+
+This should feel like an operations command surface.
+
+Examples of cards/rows:
+- show name + timing
+- deal type + amount / estimate
+- settlement status
+- ratchet or key deal note
+- dispute note
+- age of unresolved item
+- latest relevant action
+
+Behavior:
+- group shows intelligently into these columns/sections
+- support status badges
+- support quick scanning
+- surface the reason an item is in a triage column
+- use concise copy
+
+Possible logic:
+THIS WEEKEND
+- imminent shows
+- active prep items
+
+NEEDS YOUR ATTENTION
+- overdue signatures
+- revised offers
+- pending confirmations
+- disputes needing action
+- stale follow-ups
+
+UNRESOLVED
+- open disputes
+- unresolved settlements
+- long-running issues
+- blocked payouts
+
+Also:
+- ensure timeline visibility remains strong
+- preserve or improve current list usability
+- add quick actions where appropriate without overcrowding
+
+==================================================
+3) /shows/[show_id]
+==================================================
+
+This page needs to become the operational source of truth for a deal.
+
+A) DEAL VERSIONING SYSTEM
+Implement a versioning / revision history system for the show deal.
+
+Requirements:
+- Every meaningful update creates a visible entry in a version history/timeline.
+- Show:
+  - what changed
+  - when it changed
+  - who changed it
+  - optional comment/reason for the change
+- Support changes caused by:
+  - email thread updates
+  - phone calls
+  - updated structured deal terms
+  - expense additions/removals
+  - revised notes
+  - settlement-impacting edits
+- Include optional comments such as:
+  - “Agent called and reduced guarantee to 6000”
+  - “Updated recoup language after email thread”
+- Represent changes in a way that increases transparency and trust.
+
+Implementation guidance:
+- Reuse any existing activity feed, audit log, comment model, or timeline pattern in the repo if available.
+- If backend persistence is out of scope, create a front-end architecture and typed model ready for persistence.
+- Avoid fake complexity; make the timeline clear and inspectable.
+
+B) COMMENTING / CHANGE RATIONALE
+Support comments attached to updates or versions.
+The goal is reviewability and institutional memory.
+
+C) EXPENSES + RECEIPT-PROOF ENFORCEMENT
+Redesign expense entry so each expense requires a supporting receipt or invoice upload/reference before it is considered valid.
+
+Requirements:
+- Each expense item should include:
+  - category
+  - description
+  - amount
+  - receipt/invoice proof
+  - proof URL or file reference
+  - uploaded/added by
+  - added at
+- Make the UI clearly show whether a line item is backed by proof.
+- Users should be able to click the proof link to inspect the receipt.
+- Expenses should roll into category totals and overall calculations automatically.
+- Add compliance logic where useful, such as cap compliance and proof completeness.
+
+If file uploads already exist, integrate with them.
+If not, create the cleanest current-stack-compatible placeholder/reference model without breaking future upload support.
+
+D) GROSS BOX OFFICE CALCULATION PANEL
+Add a dedicated, clear panel explaining gross box office math.
+
+Goal:
+Gross is often ambiguous, so the UI should make it explicit.
+
+Show:
+- reported gross
+- fees in
+- fees out
+- deductions / adjustments
+- net result
+- explanation of what counts toward gross vs fees
+- links/proof where applicable
+
+This should help resolve marketing/hospitality/recoup disputes by making the math inspectable.
+
+E) DEAL VISUALIZER
+Add a visual explanation for the deal structure.
+Instead of only raw fields, provide a visual module showing how the deal works.
+
+Examples:
+- Flat deal visualizer
+- Vs deal visualizer
+- Percentage of net visualizer
+- Bonus / ratchet visualizer where relevant
+
+This should help users understand why the payout result is what it is.
+
+F) RIGHT-SIDE CALCULATOR PANEL
+In the right-side empty space, create a premium calculator tile/panel.
+
+Design direction:
+- inspired by Teenage Engineering / Bauhaus / precision industrial product design
+- but still consistent with the app’s existing aesthetic
+- should feel engineered, not ornamental
+
+Functional requirements:
+- it must be a working calculator
+- users can add their own mathematical logic similar to an Excel-style working area
+- it can use surfaced fields already available from the page
+- users can modify assumptions/inputs
+- users can create a revised calculation
+- the resulting payout to the artist is shown clearly with excellent UX
+- allow users to choose push to invoice / push to settlement flow once confirmed
+- once confirmed, pass the resulting calculation forward to /shows/[show_id]/settle
+
+Implementation notes:
+- do not build a full spreadsheet product
+- keep it scoped and elegant
+- expose key variables and editable inputs
+- support creating a new calculation/version from the edits
+- make the output confidence-building and operationally useful
+
+G) IMAGE / VISUAL DESIGN
+Do not just place text in the empty panel.
+Design it properly as a premium operational calculator module integrated into the page layout.
+
+==================================================
+4) /shows/[show_id]/settle
+==================================================
+
+This page should become a collaborative settlement review page.
+
+Concept:
+It should feel like a pull request review page for a settlement, where the calculation was prepared upstream on the show page and is now being reviewed, commented on, edited if needed, and either accepted or sent back.
+
+GOALS
+- collaborative review surface
+- visibility into how the total was derived
+- comments/disputes on specific sections
+- approval / sign-off flow
+- payout confirmation
+
+PRIMARY LAYOUT
+The page should present:
+- settlement summary
+- “total to artist”
+- invoice-style breakdown
+- how we got here
+- payout destination / wire info
+- reviewer confirmation input
+- confirm payout action
+- comments / review history / change requests
+- ability to modify or send back if needed
+
+INVOICE / REVIEW PANEL
+Include a strong central panel with information like:
+- settlement title
+- artist/show/date
+- total to artist
+- concise calculation breakdown
+- gross
+- expenses
+- net
+- share/percentage applied
+- bonus/additions
+- payout destination
+- reviewer name input
+- confirm payout button
+
+PR-STYLE REVIEW MODEL
+This page should behave like a review/approval layer:
+- show submitted calculation/version from previous page
+- show whether anything changed since last review
+- support comments, notes, disputes, and suggested changes
+- support accepted / needs changes / disputed style statuses
+- make review state explicit
+
+COLLABORATION DETAILS
+Users should be able to:
+- comment on the settlement
+- flag a dispute
+- request changes
+- modify if permissions/workflow allow
+- confirm payout once satisfied
+
+UX NOTES
+- keep the experience highly legible
+- confidence and traceability are more important than flashy visuals
+- should feel like settlement review for a financial workflow
+- use pull-request metaphors where they help:
+  - submitted version
+  - requested changes
+  - approved
+  - timeline / review history
+- but do not make it feel like GitHub copycat UI
+
+DATA / FLOW REQUIREMENTS
+
+- Ensure data can flow from /shows/[show_id] to /shows/[show_id]/settle
+- Settlement page should reflect the latest selected or confirmed calculation/version
+- If no submitted calculation exists, show a clear empty state with a CTA to return and prepare settlement
+- Preserve source-of-truth clarity between:
+  - original deal terms
+  - revised terms
+  - submitted settlement calculation
+  - approved payout
+
+TECHNICAL / DESIGN QUALITY BAR
+
+UI architecture:
+- clean component composition
+- no giant monolithic page files if the repo prefers modularization
+- extract reusable panels where sensible
+- use typed interfaces for new entities
+- keep naming clear and domain-specific
+
+Recommended entities/types to introduce or extend if needed:
+- ArtistHealthSummary
+- ArtistRelationshipInsights
+- ArtistDealMix
+- AgentRelationshipSummary
+- ShowTriageStatus
+- DealVersion
+- DealVersionChange
+- DealComment
+- ExpenseProof
+- BoxOfficeBreakdown
+- DealVisualizationModel
+- SettlementDraft
+- SettlementReview
+- SettlementReviewStatus
+- SettlementCalculationSnapshot
+
+But:
+Only create abstractions that match the codebase style.
+Do not overengineer.
+
+INTERACTION / STATE EXPECTATIONS
+
+- URL-aware filter/sort state where appropriate
+- local state where appropriate
+- preserve existing routing patterns
+- preserve SSR/CSR conventions of the repo
+- preserve data-fetching conventions of the repo
+- handle undefined/null/missing fields gracefully
+- support realistic sample data if current backend data is incomplete
+
+CHARTS / DATA VIZ
+
+Only add charts where they materially improve understanding.
+Likely useful:
+- deal type distribution
+- payout by deal type
+- expense compliance / proof coverage
+- version history trend or count if tasteful
+Do not overload pages with charts.
+
+DESIGN SYSTEM REQUIREMENTS
+
+- Use the existing app aesthetic first.
+- If design freedom is needed, apply these principles:
+  - compact web-app typography
+  - premium neutral surfaces
+  - restrained accent usage
+  - strong spacing rhythm
+  - tabular numeric styling for money and counts
+  - subtle separators, not noisy borders
+  - high information density with clear grouping
+  - elegant status colors with restrained risk highlighting
+
+- Make the dashboard/list/product surfaces feel editorial and operational.
+- Keep headings compact. This is a product UI, not a landing page.
+- No oversized hero type.
+- No decorative gradients unless the codebase already uses them.
+
+RESPONSIVENESS
+
+Desktop:
+- preserve dense operational clarity
+- use side panels intelligently
+- avoid wasted whitespace
+
+Tablet/mobile:
+- stack sections in a sensible order
+- keep filters and actions reachable
+- maintain readability of money/status/versioning data
+- avoid broken multi-column collapse
+- ensure calculator and settlement panels remain usable
+
+ACCESSIBILITY
+
+- semantic structure
+- keyboard accessible controls
+- visible focus states
+- sufficient contrast
+- icon buttons with labels or tooltips
+- charts with accessible labels or summaries
+- clear status communication not color-only
+
+VALIDATION CHECKLIST
+
+Before finishing:
+- verify all changed routes render
+- verify no type errors
+- verify no lint errors
+- verify the build passes
+- verify imports are clean
+- verify no dead components
+- verify mobile layout does not break
+- verify loading/empty/error states exist
+- verify new actions have sensible handlers
+- verify any fake/mock data is clearly integrated and not breaking production assumptions
+
+DELIVERABLE FORMAT
+
+At the end, provide:
+1. Summary of what you changed
+2. Key files modified
+3. Any new components/types/hooks added
+4. Assumptions made
+5. Validation completed
+6. Remaining optional enhancements
+
+START NOW
+
+Begin by:
+1. auditing the repository and route structure
+2. identifying all relevant files and domain models
+3. summarizing the existing implementation
+4. proposing the implementation plan
+5. then executing the changes</code></pre>
+            </details>
+        </section>
+
+        <!-- Section 15 -->
+        <section id="closing">
+            <h2>15. Closing Memo & Loom Video Demo</h2>
+            <a href="https://www.loom.com/share/08a1cd5f1db34ba5bb8d316441e07177" target="_blank" class="card" style="display: block; text-align: center;">
+                    <strong style="color: var(--accent-blue);">Loom Video demo</strong>
+                    <p style="font-size: 0.8rem; margin: 0.5rem 0 0;">Walkthrough and explanation of features</p>
+            </a>
+            <p>This artifact demonstrates a core product management philosophy: <strong>software that moves money must prioritize clarity over cleverness.</strong></p>
+            <p>By digging past surface-level UI complaints and interrogating the underlying data schema, we uncovered that the true user pain wasn't a clunky interface—it was a lack of systemic trust, leading to massive silent margin leaks and high engine failure rates.</p>
+            <p>This slice proves that by aligning technical architecture (immutable version logs, explicit mathematical interfaces) with deep human empathy for the 2:00 a.m. operational reality, we can successfully transform Greenroom from a mediocre calendar app into the definitive financial operating system for live music.</p>
+        </section>
+
+    </main>
+</div>
+
+<script>
+    // Intersection Observer to highlight sticky TOC
+    document.addEventListener('DOMContentLoaded', () => {
+        const sections = document.querySelectorAll('section');
+        const navLinks = document.querySelectorAll('.toc-list a');
+
+        const observerOptions = {
+            root: null,
+            rootMargin: '-20% 0px -60% 0px',
+            threshold: 0
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    navLinks.forEach(link => {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === `#${id}`) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }, observerOptions);
+
+        sections.forEach(section => observer.observe(section));
+    });
+</script>
+
+</body>
+</html>
