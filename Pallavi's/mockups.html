@@ -1,0 +1,1677 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Deal Modeling — Wireframes (low-fi)</title>
+<style>
+  :root {
+    --ink: #1a1814;
+    --ink-soft: #555;
+    --ink-faint: #888;
+    --paper: #fdfbf6;
+    --line: #999;
+    --line-soft: #ccc;
+    --line-faint: #e3dfd2;
+    --warn-bg: #fff7e0;
+    --warn-line: #c89400;
+    --warn-ink: #6e5300;
+    --ok-bg: #eaf5ec;
+    --ok-line: #2a7d3a;
+    --ok-ink: #1a5223;
+    --bad-bg: #fbeceb;
+    --bad-line: #b03a2e;
+    --bad-ink: #7d2a23;
+    --note-bg: #f3f0e6;
+  }
+
+  body {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--paper);
+    color: var(--ink);
+    max-width: 960px;
+    margin: 40px auto;
+    padding: 0 24px 80px;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  /* doc header */
+  .doc-header {
+    margin-bottom: 28px;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed var(--line);
+  }
+  h1 {
+    font-size: 21px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    letter-spacing: -0.3px;
+  }
+  .meta {
+    color: var(--ink-faint);
+    font-size: 11.5px;
+    margin: 0;
+  }
+
+  /* legend */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    padding: 10px 14px;
+    background: #fbf8ef;
+    border: 1px dashed var(--line-faint);
+    margin: 0 0 28px;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .legend .lg-key {
+    font-size: 9.5px;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ink);
+    margin-right: 2px;
+  }
+  .legend .lg-item { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* TOC */
+  .toc {
+    background: var(--note-bg);
+    border: 1px dashed var(--line-faint);
+    padding: 14px 18px;
+    margin-bottom: 44px;
+    font-size: 12px;
+  }
+  .toc .toc-label {
+    display: block;
+    font-size: 9.5px;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .toc a { color: var(--ink); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc ol { margin: 0; padding-left: 22px; }
+  .toc li { margin: 4px 0; }
+
+  /* screen frame */
+  .screen {
+    border: 1.5px solid var(--ink);
+    background: #fff;
+    margin: 44px 0 56px;
+    padding: 0;
+    box-shadow: 4px 4px 0 var(--line-faint);
+  }
+  .screen-title {
+    background: var(--ink);
+    color: #fff;
+    padding: 10px 16px;
+    font-size: 11.5px;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+  }
+  .screen-title .num {
+    opacity: 0.55;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+  }
+  .screen-body {
+    padding: 22px;
+  }
+  .screen-note {
+    background: var(--note-bg);
+    border-top: 1px dashed var(--line-faint);
+    padding: 14px 18px;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    line-height: 1.65;
+  }
+  .screen-note strong { color: var(--ink); }
+  .screen-note em { font-style: normal; color: var(--ink); font-weight: 600; }
+
+  /* chrome */
+  .chrome {
+    display: grid;
+    grid-template-columns: 148px 1fr;
+    border: 1px dashed var(--line-faint);
+    min-height: 340px;
+    background: #fff;
+  }
+  .chrome.three {
+    grid-template-columns: 148px 178px 1fr;
+  }
+
+  /* nav */
+  .nav {
+    border-right: 1px dashed var(--line-faint);
+    padding: 16px 12px;
+    background: #faf7f0;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .nav .logo {
+    color: var(--ink);
+    font-weight: 700;
+    margin-bottom: 16px;
+    font-size: 12px;
+    letter-spacing: -0.2px;
+  }
+  .nav ul { list-style: none; padding: 0; margin: 0; }
+  .nav li {
+    padding: 5px 10px;
+    margin: 0 -10px;
+  }
+  .nav li.active {
+    color: var(--ink);
+    font-weight: 700;
+    background: #fff;
+    border-left: 2px solid var(--ink);
+    padding-left: 8px;
+  }
+
+  /* sub-nav */
+  .subnav {
+    border-right: 1px dashed var(--line-faint);
+    padding: 16px 12px;
+    background: #fcfaf3;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .subnav .label {
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 0.9px;
+    color: var(--ink-faint);
+    margin: 0 0 8px;
+    font-weight: 700;
+  }
+  .subnav ul { list-style: none; padding: 0; margin: 0; }
+  .subnav li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 8px;
+    margin: 0 -8px;
+    border-radius: 3px;
+  }
+  .subnav li.active {
+    background: #fff;
+    color: var(--ink);
+    font-weight: 700;
+    border-left: 2px solid var(--ink);
+    padding-left: 6px;
+  }
+  .subnav .badge-count {
+    font-size: 10px;
+    color: var(--ink-faint);
+    background: #f0eee5;
+    border: 1px solid var(--line-soft);
+    padding: 0 6px;
+    border-radius: 8px;
+    font-weight: 500;
+  }
+  .subnav li.active .badge-count { background: var(--note-bg); color: var(--ink); }
+  .subnav li.alert .badge-count {
+    background: var(--bad-bg);
+    border-color: var(--bad-line);
+    color: var(--bad-line);
+    font-weight: 700;
+  }
+  .subnav .divider {
+    height: 1px;
+    background: var(--line-faint);
+    margin: 12px 0;
+    border: 0;
+  }
+  .subnav .new-deal-btn {
+    display: block;
+    text-align: center;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* main content area */
+  .main { padding: 20px 24px; }
+  .eyebrow {
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 4px;
+    font-weight: 700;
+  }
+  .page-h1 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 18px;
+    letter-spacing: -0.3px;
+    line-height: 1.25;
+  }
+  .page-h1 .h1-sub {
+    font-weight: 500;
+    color: var(--ink-soft);
+    font-size: 14px;
+    letter-spacing: 0;
+    margin-left: 4px;
+  }
+
+  /* boxes */
+  .box {
+    border: 1px dashed var(--line);
+    padding: 14px;
+    margin: 12px 0;
+  }
+  .box.warn { background: var(--warn-bg); border-color: var(--warn-line); border-style: solid; }
+  .box.ok { background: var(--ok-bg); border-color: var(--ok-line); border-style: solid; }
+  .box.bad { background: var(--bad-bg); border-color: var(--bad-line); border-style: solid; }
+  .box.muted { background: var(--note-bg); border-color: var(--line-faint); color: var(--ink-soft); }
+  .box-title {
+    font-size: 9.5px;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .box.warn .box-title, .box.ok .box-title, .box.bad .box-title { color: var(--ink); }
+
+  /* inline counterparty reference (lighter than .box.bad) */
+  .ref-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    background: #fdf3f1;
+    border: 1px dashed var(--bad-line);
+    font-size: 11px;
+    color: var(--bad-ink);
+    margin: 12px 0;
+  }
+  .ref-strip .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--bad-line);
+    flex-shrink: 0;
+  }
+  .ref-strip a {
+    color: var(--bad-ink);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+  }
+
+  /* fields */
+  .field {
+    display: grid;
+    grid-template-columns: 170px 1fr 96px;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px dotted var(--line-faint);
+    align-items: center;
+  }
+  .field:last-child { border-bottom: 0; }
+  .field .label { color: var(--ink-soft); font-size: 11.5px; }
+  .field .val { font-weight: 600; font-size: 12.5px; }
+  .field .tag {
+    font-size: 9.5px;
+    text-align: right;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .field.flagged {
+    background: var(--warn-bg);
+    border-bottom: 1.5px solid var(--warn-line);
+    border-top: 1.5px solid var(--warn-line);
+    padding: 10px 12px;
+    margin: 6px -12px;
+  }
+  .field.flagged .label { color: var(--warn-ink); font-weight: 700; }
+  .field.flagged .val { color: var(--ink); }
+  .field.flagged .val::before {
+    content: "⚠ ";
+    color: var(--warn-line);
+    font-weight: 700;
+  }
+
+  .tag-ok { color: var(--ok-line); }
+  .tag-warn { color: var(--warn-line); font-weight: 700; }
+  .tag-bad { color: var(--bad-line); font-weight: 700; }
+  .tag-mute { color: var(--ink-faint); }
+
+  /* buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1.5px solid var(--ink);
+    background: #fff;
+    padding: 7px 14px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    margin-right: 8px;
+    cursor: default;
+    letter-spacing: 0.1px;
+    color: var(--ink);
+  }
+  .btn.primary {
+    background: var(--ink);
+    color: #fff;
+    box-shadow: 2px 2px 0 var(--line-faint);
+  }
+  .btn.disabled {
+    opacity: 0.4;
+    border-style: dashed;
+    background: #fff;
+    color: var(--ink-soft);
+  }
+  .actions {
+    margin-top: 18px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .actions .hint {
+    color: var(--ink-faint);
+    font-size: 11px;
+    margin-left: 4px;
+  }
+
+  /* layout helpers */
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .small { font-size: 11px; color: var(--ink-soft); }
+  .caption { color: var(--ink-faint); font-size: 11px; font-style: italic; }
+
+  /* pills */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--line);
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: #fff;
+    color: var(--ink-soft);
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .pill.neutral { background: var(--note-bg); border-color: var(--line-faint); color: var(--ink); }
+  .pill.warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
+  .pill.ok { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-ink); }
+  .pill.bad { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad-ink); }
+  .pill.confidence {
+    text-transform: none;
+    letter-spacing: 0.2px;
+    font-weight: 600;
+    font-size: 10px;
+  }
+
+  /* form inputs */
+  .input {
+    border: 1px solid var(--line-soft);
+    background: #fff;
+    padding: 7px 11px;
+    font-family: inherit;
+    font-size: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .input.placeholder { color: var(--ink-faint); font-style: italic; }
+  select.input {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M0 0l5 6 5-6z' fill='%23888'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 26px;
+    cursor: pointer;
+  }
+  input[type="date"].input { font-family: inherit; color: var(--ink); }
+  .field-meta {
+    font-size: 10px;
+    color: var(--ink-faint);
+    margin-top: 5px;
+    letter-spacing: 0.2px;
+    line-height: 1.5;
+  }
+  .field-meta .src-pill {
+    display: inline-block;
+    border: 1px dashed var(--line-soft);
+    background: var(--note-bg);
+    padding: 0 5px;
+    border-radius: 3px;
+    color: var(--ink-soft);
+    margin-right: 4px;
+    font-size: 9.5px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 16px;
+    align-items: start;
+    margin: 14px 0;
+  }
+  .form-row .lbl {
+    color: var(--ink-soft);
+    font-size: 12px;
+    padding-top: 9px;
+  }
+  .form-row .lbl .req { color: var(--bad-line); font-weight: 700; }
+
+  /* AI-classifier panel */
+  .classifier {
+    background: linear-gradient(180deg, #f4faf5 0%, #e8f3ea 100%);
+    border: 1.5px solid var(--ok-line);
+    padding: 18px;
+    margin: 18px 0 12px;
+    display: grid;
+    grid-template-columns: 1fr 268px;
+    gap: 20px;
+    align-items: start;
+    position: relative;
+  }
+  .classifier::before {
+    content: "▸ AI · STEP 1 · CLASSIFY";
+    position: absolute;
+    top: -10px;
+    left: 14px;
+    background: var(--ok-line);
+    color: #fff;
+    padding: 2px 10px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border-radius: 2px;
+  }
+  .classifier .cls-title {
+    font-size: 9.5px;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: var(--ok-ink);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .classifier .cls-pick {
+    font-size: 14.5px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .classifier .cls-trig {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+  }
+  .classifier .cls-trig em {
+    font-style: italic;
+    color: var(--ink);
+    background: rgba(255,255,255,0.7);
+    padding: 0 4px;
+    border-radius: 2px;
+  }
+  .classifier .cls-help {
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    margin-top: 10px;
+    line-height: 1.55;
+  }
+  .extract-marker {
+    margin: 18px 0 0;
+    position: relative;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line-faint);
+  }
+  .extract-marker::before {
+    content: "▸ AI · STEP 2 · EXTRACT + DISAMBIGUATE";
+    position: absolute;
+    top: -7px;
+    left: 14px;
+    background: var(--ink);
+    color: #fff;
+    padding: 2px 10px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border-radius: 2px;
+  }
+
+  /* modal */
+  .modal-shade {
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 8px,
+      rgba(0,0,0,0.025) 8px,
+      rgba(0,0,0,0.025) 16px
+    );
+    padding: 24px;
+    border: 1px dashed var(--line-faint);
+    position: relative;
+  }
+  .modal-shade::before {
+    content: "MODAL · APPEARS OVER SCREEN 4 · BACKDROP DIMMED";
+    display: block;
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.9px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .modal-wrap {
+    border: 1.5px solid var(--ink);
+    padding: 0;
+    margin: 0 auto;
+    background: #fff;
+    max-width: 560px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.08);
+  }
+  .modal-head {
+    background: var(--warn-bg);
+    padding: 11px 16px;
+    border-bottom: 1.5px solid var(--ink);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--warn-ink);
+    letter-spacing: 0.3px;
+  }
+  .modal-body { padding: 18px; }
+  .modal-q {
+    font-size: 13.5px;
+    font-weight: 700;
+    margin: 14px 0 8px;
+  }
+  .modal-opt {
+    border: 1px dashed var(--line-soft);
+    padding: 12px 14px;
+    margin: 10px 0;
+    background: #fdfdfb;
+    line-height: 1.55;
+  }
+  .modal-opt strong { color: var(--ink); }
+  .modal-opt.chosen {
+    border: 1.5px solid var(--ok-line);
+    background: var(--ok-bg);
+    box-shadow: 2px 2px 0 rgba(42,125,58,0.18);
+  }
+
+  /* email */
+  .email-wrap {
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 8px,
+      rgba(0,0,0,0.02) 8px,
+      rgba(0,0,0,0.02) 16px
+    );
+    padding: 20px;
+    border: 1px dashed var(--line-faint);
+    position: relative;
+  }
+  .email-wrap::before {
+    content: "EMAIL · RENDERED IN DANIEL'S INBOX · NOT GREENROOM'S UI";
+    display: block;
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.9px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .email {
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 20px 24px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    max-width: 600px;
+    margin: 0 auto;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.06);
+  }
+  .email .from {
+    color: var(--ink-faint);
+    font-size: 11.5px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--line-faint);
+    padding-bottom: 12px;
+    line-height: 1.6;
+  }
+  .email h3 { margin: 0 0 14px; font-size: 17px; font-weight: 700; }
+  .email .terms {
+    border: 1px solid var(--line-soft);
+    padding: 14px 18px;
+    margin: 14px 0;
+    background: #faf8f3;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  /* timeline */
+  .timeline {
+    border-left: 2px solid var(--line);
+    margin: 8px 0 8px 14px;
+    padding-left: 18px;
+  }
+  .timeline .item {
+    margin: 14px 0;
+    font-size: 12px;
+    line-height: 1.55;
+    position: relative;
+  }
+  .timeline .item::before {
+    content: "";
+    position: absolute;
+    left: -24px;
+    top: 5px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1.5px solid var(--ink);
+  }
+  .timeline .item.lock::before {
+    background: var(--ok-line);
+    border-color: var(--ok-line);
+    box-shadow: 0 0 0 3px var(--ok-bg);
+  }
+  .timeline .item.sentback::before {
+    background: var(--warn-line);
+    border-color: var(--warn-line);
+  }
+  .timeline .item .when {
+    color: var(--ink-faint);
+    font-size: 10.5px;
+    letter-spacing: 0.3px;
+  }
+
+  /* deals list */
+  .list-frame {
+    border: 1px dashed var(--line-faint);
+    background: #fff;
+    margin: 8px 0 18px;
+  }
+  .list-head {
+    display: grid;
+    grid-template-columns: 1.4fr 1.2fr 110px 130px 30px;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--note-bg);
+    border-bottom: 1px solid var(--line-faint);
+    font-size: 9px;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 700;
+  }
+  .deal-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1.2fr 110px 130px 30px;
+    gap: 12px;
+    padding: 11px 14px;
+    border-bottom: 1px dotted var(--line-faint);
+    align-items: center;
+    font-size: 12px;
+  }
+  .deal-row:last-child { border-bottom: 0; }
+  .deal-row .show { font-weight: 700; color: var(--ink); }
+  .deal-row .sub { font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; }
+  .deal-row .who { font-size: 11.5px; }
+  .deal-row .date { font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
+  .deal-row .action {
+    text-align: right;
+    font-size: 14px;
+    color: var(--ink-faint);
+  }
+  .deal-row.alert {
+    background: #fdf3f1;
+    border-left: 3px solid var(--bad-line);
+    padding-left: 11px;
+  }
+  .deal-row.alert .show { color: var(--bad-ink); }
+  .risk-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--bad-line);
+    font-size: 10px;
+    letter-spacing: 0.3px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .risk-mark::before {
+    content: "▲";
+    font-size: 9px;
+  }
+
+  /* settlement math row helpers */
+  .math-total {
+    background: var(--ok-bg);
+    border-top: 1.5px solid var(--ok-line);
+    border-bottom: 1.5px solid var(--ok-line);
+    padding: 10px 12px;
+    margin: 4px -12px;
+  }
+  .math-total .label, .math-total .val { font-weight: 700; color: var(--ok-ink); font-size: 13px; }
+
+  /* edit diff */
+  .diff-old {
+    text-decoration: line-through;
+    color: var(--ink-faint);
+  }
+  .diff-new {
+    color: var(--ok-line);
+    font-weight: 700;
+  }
+  .diff-warn {
+    color: var(--warn-line);
+    font-weight: 700;
+  }
+
+  /* not-built screens */
+  .not-built {
+    background: repeating-linear-gradient(
+      45deg,
+      var(--note-bg),
+      var(--note-bg) 10px,
+      #e8e3d3 10px,
+      #e8e3d3 11px
+    );
+    padding: 10px 14px;
+    border: 1px solid var(--line-faint);
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+  }
+  .not-built strong {
+    color: var(--ink);
+    font-size: 9.5px;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    display: inline-block;
+    background: var(--ink);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 2px;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <h1>Deal Modeling — wireframes (low-fi)</h1>
+  <p class="meta">
+    Pallavi · 2026-05-19 · v5 (post evidence-matrix v2 — real numbers, recoup as full axis, 12-pattern classifier, taxonomy-extend path)
+  </p>
+</div>
+
+<div class="legend">
+  <span class="lg-key">Legend</span>
+  <span class="lg-item"><span class="pill ok">ok</span> AI confident</span>
+  <span class="lg-item"><span class="pill warn">flag</span> ambiguous · must resolve</span>
+  <span class="lg-item"><span class="pill bad">risk</span> per-agent signal</span>
+  <span class="lg-item"><span class="pill neutral">state</span> deal-state pill</span>
+  <span class="lg-item" style="color:var(--ink-faint)">dashed border = wireframe · not styled</span>
+</div>
+
+<div class="toc">
+  <span class="toc-label">Screens</span>
+  <ol>
+    <li><a href="#s1">Deals index — status side-nav (Drafts, Awaiting agent, Sent back, Locked, Drifted)</a></li>
+    <li><a href="#s2">Deal capture — initiate (manual entry of show + counterparty)</a></li>
+    <li><a href="#s3">Deal capture — paste email + per-agent risk banner</a></li>
+    <li><a href="#s4">After AI parse — classifier + extracted fields with flagged clause</a></li>
+    <li><a href="#s5">Disambiguation modal (Coastal Spell recoup)</a></li>
+    <li><a href="#s6">Resolved + send for approval</a></li>
+    <li><a href="#s7">Agent email view (mock)</a></li>
+    <li><a href="#s8">Send-back received in Mariana's UI</a></li>
+    <li><a href="#s9">Approved &amp; locked + version history</a></li>
+    <li><a href="#s10">Drift (v2, labeled as path-to-optimization)</a></li>
+    <li><a href="#s11">Settlement-against-locked-deal (next ship, not built)</a></li>
+  </ol>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s1">
+  <div class="screen-title"><span>Screen 1 · Deals index — status side-nav</span><span class="num">1 / 11</span></div>
+  <div class="screen-body">
+    <div class="chrome three">
+      <div class="nav">
+        <div class="logo">Greenroom</div>
+        <ul>
+          <li>Shows</li>
+          <li>Artists</li>
+          <li class="active">Deals</li>
+          <li>Reports</li>
+        </ul>
+      </div>
+      <div class="subnav">
+        <div class="label">Status</div>
+        <ul>
+          <li><span>All deals</span><span class="badge-count">[N]</span></li>
+          <li><span>Drafts</span><span class="badge-count">[3]</span></li>
+          <li><span>Awaiting agent</span><span class="badge-count">[5]</span></li>
+          <li class="alert active">
+            <span>Sent back to me</span>
+            <span class="badge-count">[1]</span>
+          </li>
+          <li><span>Locked</span><span class="badge-count">[24]</span></li>
+          <li><span>Drifted</span><span class="badge-count">[0]</span></li>
+        </ul>
+        <hr class="divider" />
+        <div class="label">Filter</div>
+        <ul>
+          <li><span>High-risk agent</span><span class="badge-count">[2]</span></li>
+          <li><span>Non-V1 deal types</span><span class="badge-count">[7]</span></li>
+        </ul>
+        <hr class="divider" />
+        <span class="btn primary new-deal-btn">+ New deal</span>
+      </div>
+      <div class="main">
+        <div class="eyebrow">Deals · sent back to me</div>
+        <div class="page-h1">1 deal needs your attention</div>
+
+        <div class="list-frame">
+          <div class="list-head">
+            <div>Show</div>
+            <div>Counterparty</div>
+            <div>Status</div>
+            <div>When</div>
+            <div></div>
+          </div>
+          <div class="deal-row alert">
+            <div>
+              <div class="show">Coastal Spell @ The Crescent</div>
+              <div class="sub">V1 · standard vs net</div>
+            </div>
+            <div>
+              <div class="who">Daniel Hwang · WME</div>
+              <div class="risk-mark">flagged counterparty</div>
+            </div>
+            <div><span class="pill warn">sent back</span></div>
+            <div class="date">9:14am today<br/><span class="sub">"marketing recoup…"</span></div>
+            <div class="action">›</div>
+          </div>
+        </div>
+
+        <div class="eyebrow" style="margin-top:24px">Recent · all statuses</div>
+        <div class="list-frame">
+          <div class="list-head">
+            <div>Show</div>
+            <div>Counterparty</div>
+            <div>Status</div>
+            <div>When</div>
+            <div></div>
+          </div>
+          <div class="deal-row">
+            <div>
+              <div class="show">Frost Choir</div>
+              <div class="sub">V1 · standard vs net</div>
+            </div>
+            <div>
+              <div class="who">Maya Okafor · Wasserman</div>
+              <div class="risk-mark">flagged counterparty</div>
+            </div>
+            <div><span class="pill neutral">awaiting</span></div>
+            <div class="date">yesterday 6pm</div>
+            <div class="action">›</div>
+          </div>
+          <div class="deal-row">
+            <div>
+              <div class="show">Halfmoon Drive</div>
+              <div class="sub">Flat</div>
+            </div>
+            <div><div class="who">Lara Bose · CAA</div></div>
+            <div><span class="pill ok">locked</span></div>
+            <div class="date">2026-05-17</div>
+            <div class="action">›</div>
+          </div>
+          <div class="deal-row">
+            <div>
+              <div class="show">Brass Hours</div>
+              <div class="sub">V1 · standard vs net</div>
+            </div>
+            <div>
+              <div class="who">Tom Neary · Wasserman</div>
+              <div class="risk-mark">flagged counterparty</div>
+            </div>
+            <div><span class="pill ok">locked</span></div>
+            <div class="date">2026-05-15</div>
+            <div class="action">›</div>
+          </div>
+          <div class="deal-row">
+            <div>
+              <div class="show">Petal Knife</div>
+              <div class="sub">V1 (draft, AI-parsed)</div>
+            </div>
+            <div><div class="who">Sarah Kim · WME</div></div>
+            <div><span class="pill neutral">draft</span></div>
+            <div class="date">2026-05-19 · 8pm</div>
+            <div class="action">›</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    <strong>Why this screen exists:</strong> the state machine has multiple states, and Mariana's "what do I need to do" answer should be visible at a glance. <em>Sent back to me</em> is the daily-open queue — today that lives in her inbox.
+    <strong>Counts are evidence:</strong> the badges become real numbers in the demo and a stat in the Loom. <strong>High-risk agent</strong> filter ties the agency-analysis fold-in into a navigable surface, not just a per-deal banner.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s2">
+  <div class="screen-title"><span>Screen 2 · Deal capture — initiate</span><span class="num">2 / 11</span></div>
+  <div class="screen-body">
+    <div class="chrome">
+      <div class="nav">
+        <div class="logo">Greenroom</div>
+        <ul>
+          <li>Shows</li>
+          <li>Artists</li>
+          <li class="active">Deals</li>
+          <li>Reports</li>
+        </ul>
+      </div>
+      <div class="main">
+        <div class="eyebrow">New deal · step 1 of 2</div>
+        <div class="page-h1">Start a new deal</div>
+
+        <div class="box muted" style="margin-top:0">
+          <div class="box-title">Integration note</div>
+          Artist, agent, and agency dropdowns pull from existing Greenroom DB tables (no free text — keeps data clean).
+          Show name is free text because the existing booking flow is not mapped from the available interviews; in the real product this step would integrate with whatever show-registration / booking surface Mariana uses today.
+          Date uses the native calendar picker.
+        </div>
+
+        <div class="box">
+          <div class="form-row">
+            <div class="lbl">Show name <span class="req">*</span></div>
+            <div>
+              <input class="input placeholder" value="e.g. Coastal Spell at The Crescent" />
+              <div class="field-meta">Free text — show may not yet exist in Greenroom.</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="lbl">Show date <span class="req">*</span></div>
+            <div>
+              <input class="input" type="date" value="2026-06-14" />
+              <div class="field-meta"><span class="src-pill">picker</span> Native calendar picker</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="lbl">Artist <span class="req">*</span></div>
+            <div>
+              <select class="input">
+                <option>— Pick from your artists —</option>
+                <option selected>Coastal Spell</option>
+                <option>Frost Choir</option>
+                <option>Halfmoon Drive</option>
+                <option>Brass Hours</option>
+                <option>Petal Knife</option>
+                <option>+ Add new artist…</option>
+              </select>
+              <div class="field-meta"><span class="src-pill">db</span> from <code>artists</code> table</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="lbl">Agent <span class="req">*</span></div>
+            <div>
+              <select class="input">
+                <option>— Pick from your agents —</option>
+                <option selected>Daniel Hwang</option>
+                <option>Sarah Kim</option>
+                <option>Tom Neary</option>
+                <option>Cass Burke</option>
+                <option>Maya Okafor</option>
+                <option>+ Add new agent…</option>
+              </select>
+              <div class="field-meta"><span class="src-pill">db</span> from <code>agents</code> table</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="lbl">Agency</div>
+            <div>
+              <select class="input">
+                <option>— Pick from agencies —</option>
+                <option selected>WME</option>
+                <option>CAA</option>
+                <option>Wasserman</option>
+                <option>Paradigm</option>
+                <option>UTA</option>
+                <option>+ Add new agency…</option>
+              </select>
+              <div class="field-meta"><span class="src-pill">db</span> from <code>agencies</code> table · used for reporting</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="lbl">Agent email</div>
+            <div>
+              <input class="input" value="daniel@wme.com" />
+              <div class="field-meta">Pre-filled from agent record; editable.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <span class="btn primary">Continue to deal capture →</span>
+          <span class="btn">Cancel</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    <strong>Why this screen is honest about what we don't know:</strong> the interviews and corpus don't tell us how shows get into Greenroom today or where the deal-capture step fits relative to booking. Rather than invent an auto-fill cascade based on the schema, the prototype asks for fields directly and flags the integration question for design discussion.
+    <strong>What the real product would do</strong> depends on the answer to: "When Mariana receives a deal email, does the show already exist in Greenroom?" That's an open question for Anil / Mariana.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s3">
+  <div class="screen-title"><span>Screen 3 · Deal capture — paste email + per-agent risk banner</span><span class="num">3 / 11</span></div>
+  <div class="screen-body">
+    <div class="chrome">
+      <div class="nav">
+        <div class="logo">Greenroom</div>
+        <ul>
+          <li>Shows</li>
+          <li>Artists</li>
+          <li class="active">Deals</li>
+          <li>Reports</li>
+        </ul>
+      </div>
+      <div class="main">
+        <div class="eyebrow">New deal · step 2 of 2</div>
+        <div class="page-h1">Capture deal terms <span class="h1-sub">· Coastal Spell · 2026-06-14</span></div>
+
+        <div class="box">
+          <div class="box-title">Context</div>
+          <div class="row" style="grid-template-columns: 1fr 1fr">
+            <div>
+              <div class="small">Show</div>
+              <div style="font-weight:600">Coastal Spell @ The Crescent · 2026-06-14</div>
+            </div>
+            <div>
+              <div class="small">Counterparty</div>
+              <div style="font-weight:600">Daniel Hwang · WME</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="box bad">
+          <div class="box-title">⚠ Counterparty signal · from your deal history</div>
+          <div style="font-size:12.5px; line-height:1.55">
+            Daniel Hwang's last <strong>6 settlements</strong>: <strong>6 disputed</strong>, <strong>5 on marketing recoup</strong>.
+            <strong>5 of those never appeared in Reports</strong> — they sat inside settlements marked <em>paid</em>.
+            <br/>Pattern at deal-capture: marketing recoup language is usually unclear.
+          </div>
+          <div class="small" style="margin-top:6px">Click to see prior deals → grounded in deal history, not gut feel.</div>
+        </div>
+
+        <div class="box">
+          <div class="box-title">Paste the deal email</div>
+          <div style="border:1px dashed var(--line-soft); padding:36px 20px; text-align:center; color:var(--ink-faint); background:#fafaf5; font-style:italic; line-height:1.6">
+            [ paste box ]<br/>
+            <span class="small" style="font-style:italic">
+              "From: Daniel Hwang &lt;daniel@wme.com&gt; ... guarantee $4,500 vs 85% of net after expenses not to exceed $3,200 plus marketing recoup not to exceed $500 ..."
+            </span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <span class="btn primary">⚡ Parse with AI</span>
+          <span class="btn">Skip — enter manually</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    <strong>The red signal box</strong> is the agency-analysis fold-in. It surfaces DB-grounded patterns at capture time rather than relying on Mariana's "all WME" memory. Placeholder numbers — final values pending DB verification.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s4">
+  <div class="screen-title"><span>Screen 4 · After AI parse — classifier + extract</span><span class="num">4 / 11</span></div>
+  <div class="screen-body">
+    <div class="chrome">
+      <div class="nav">
+        <div class="logo">Greenroom</div>
+        <ul>
+          <li>Shows</li>
+          <li>Artists</li>
+          <li class="active">Deals</li>
+          <li>Reports</li>
+        </ul>
+      </div>
+      <div class="main">
+        <div class="eyebrow">New deal · draft</div>
+        <div class="page-h1">Coastal Spell <span class="h1-sub">· 2026-06-14</span></div>
+
+        <div class="ref-strip">
+          <span class="dot"></span>
+          <span><strong>Daniel Hwang · WME</strong> — counterparty flag active. <a href="#s3">See signal on screen 3 ↗</a></span>
+        </div>
+
+        <div class="classifier">
+          <div>
+            <div class="cls-title">Deal type · AI-classified</div>
+            <div class="cls-pick">
+              V1 — Vs % of net, whichever greater
+              <span class="pill ok confidence" style="margin-left:4px">high confidence</span>
+            </div>
+            <div class="cls-trig">
+              Triggers from email: <em>"vs 85% of net after expenses"</em> · <em>"expense cap $3,200"</em>
+            </div>
+            <div class="cls-help">
+              Greenroom recognizes 12 codified patterns (V1–V9 + N1 + G1 + D1) + Flat. Regex classifier hits 0 unmatched on 328 non-flat deals in the last 24 months. The classifier is the AI's first job — field extraction below uses this template's schema.
+            </div>
+          </div>
+          <div>
+            <div class="small" style="margin-bottom:5px; font-weight:600">Override deal type</div>
+            <select class="input" style="width:100%">
+              <optgroup label="— Vs sub-variants (9) —">
+                <option selected>V1 · Vs % of net, whichever greater</option>
+                <option>V2 · Vs slash-split</option>
+                <option>V3 · Vs slash-split with walkout above breakeven</option>
+                <option>V4 · Guarantee vs % of net (compact form)</option>
+                <option>V5 · Vs with escalator/ratchet over capacity</option>
+                <option>V6 · Vs % of GROSS, whichever greater</option>
+                <option>V7 · Vs % of gross (compact, with risk caveat)</option>
+                <option>V8 · Vs with walkout pot (spelled out)</option>
+                <option>V9 · Vs with inline capacity-ratchet</option>
+              </optgroup>
+              <optgroup label="— Other (3) —">
+                <option>N1 · % of net, no guarantee</option>
+                <option>G1 · % of gross, simple split</option>
+                <option>D1 · Door deal, DIY/experimental</option>
+              </optgroup>
+              <optgroup label="— Flat —">
+                <option>Flat · single guarantee, no upside</option>
+              </optgroup>
+              <optgroup label="— Off-system —">
+                <option>Flag: bonus lives in email (3.8% of deals) — link only</option>
+              </optgroup>
+            </select>
+            <div class="field-meta" style="margin-top:5px">
+              <span class="src-pill">codes</span> from <code>dealnotes_inductive_codes.md</code> · only V1 schema is built in v1
+            </div>
+          </div>
+        </div>
+
+        <div class="extract-marker">
+          <div class="row" style="margin-top:18px">
+            <div class="box muted">
+              <div class="box-title">Source email</div>
+              <div style="font-size:11.5px; line-height:1.65">
+                "Hey Mariana — terms for Coastal Spell 6/14:<br/>
+                <strong>$4,500</strong> vs <strong>85%</strong> of net after expenses<br/>
+                expense cap <strong>$3,200</strong><br/>
+                <em>marketing recoup not to exceed $500</em><br/>
+                walkout pot $200<br/>
+                — Daniel"
+              </div>
+            </div>
+            <div class="box">
+              <div class="box-title">Structured deal · AI-parsed</div>
+
+              <div class="field">
+                <span class="label">Deal type</span>
+                <span class="val">V1 — standard vs net</span>
+                <span class="tag tag-ok">✓ ok</span>
+              </div>
+              <div class="field">
+                <span class="label">Guarantee</span>
+                <span class="val">$4,500</span>
+                <span class="tag tag-ok">✓ ok</span>
+              </div>
+              <div class="field">
+                <span class="label">Artist split %</span>
+                <span class="val">85% (after expenses)</span>
+                <span class="tag tag-ok">✓ ok</span>
+              </div>
+              <div class="field">
+                <span class="label">Expense cap</span>
+                <span class="val">$3,200</span>
+                <span class="tag tag-ok">✓ ok</span>
+              </div>
+              <div class="field" style="border-bottom:0; padding-bottom:4px">
+                <span class="label" style="font-weight:600">Recoups</span>
+                <span class="val" style="font-size:11px; color:var(--ink-faint)">structured list · category + cap + treatment</span>
+                <span class="tag tag-mute">2 lines</span>
+              </div>
+              <div class="field flagged" style="padding-left:14px; border-left:2px solid var(--warn,#c98a00)">
+                <span class="label">↳ Marketing</span>
+                <span class="val">cap $500 · <em>treatment ambiguous</em> — "not to exceed $500"</span>
+                <span class="tag tag-warn">resolve</span>
+              </div>
+              <div class="field flagged" style="padding-left:14px; border-left:2px solid var(--warn,#c98a00)">
+                <span class="label">↳ Other categories</span>
+                <span class="val">email didn't mention specialty backline, hospitality overage, production overage — <em>confirm none allowed</em></span>
+                <span class="tag tag-warn">resolve</span>
+              </div>
+              <div class="field">
+                <span class="label">Walkout pot</span>
+                <span class="val">$200</span>
+                <span class="tag tag-ok">✓ ok</span>
+              </div>
+              <div class="field">
+                <span class="label">Bonus</span>
+                <span class="val" style="color:var(--ink-faint); font-weight:500">— not specified</span>
+                <span class="tag tag-mute">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <span class="btn disabled">Save deal</span>
+          <span class="hint">▸ resolve 2 flags to continue</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    <strong>Two AI mechanisms, one screen.</strong>
+    <em>Top panel — classification:</em> the AI maps the email to one of 12 codified deal patterns (V1–V9 + N1 + G1 + D1) or flags it off-system. Mariana sees the match, the triggering phrases, and a dropdown to override. The 9 V-variants aren't bespoke chaos — they're a finite, regex-classifiable set (0 unmatched on 328 non-flat deals).
+    <em>Bottom panel — extraction + forced disambiguation:</em> within the chosen template's schema, fields fill in. <strong>Recoups are a full axis</strong>, not a single field — one row per recoup line with category + cap + treatment. The Hwang-pattern prevention is the second flag: even when the agent's email mentions no other categories, the form forces a "confirm none allowed" answer. Save is blocked until all flags resolve.
+    <strong>Prototype scope:</strong> only V1 fields are built. Other dropdown items would be greyed "schema not yet implemented" in the real product. AI parse is pre-filled synthetic data in this demo; live LLM is the next-ship.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s5">
+  <div class="screen-title"><span>Screen 5 · Disambiguation modal — the Coastal Spell case</span><span class="num">5 / 11</span></div>
+  <div class="screen-body">
+    <div class="modal-shade">
+      <div class="modal-wrap">
+        <div class="modal-head">⚠ Resolve ambiguity · Recoup line 1 of 2 · Marketing</div>
+        <div class="modal-body">
+          <div class="small" style="margin-bottom:6px">The email says:</div>
+          <div class="box muted" style="margin-top:0">
+            "expense cap $3,200<br/><em>marketing recoup not to exceed $500</em>"
+          </div>
+
+          <div class="modal-q">How is the $500 marketing recoup treated?</div>
+
+          <div class="modal-opt">
+            <strong>A · In the cap.</strong> Marketing is part of the $3,200 cap. Total recoupable = $3,200 (marketing included within it).
+          </div>
+          <div class="modal-opt chosen">
+            <strong>B · On top of the cap.</strong> Marketing of $500 is on top of the $3,200 cap. Total recoupable = $3,700.
+            <div class="small" style="margin-top:4px">▸ this is what Mariana picks</div>
+          </div>
+          <div class="modal-opt">
+            <strong>C · None of these — flag for variant review.</strong> Pushes to Mariana's taxonomy-extension queue. The slice treats Mariana as design partner for new patterns.
+          </div>
+          <div class="modal-opt">
+            <strong>D · Other (free text).</strong> Logged for review; flag stays until reviewed.
+          </div>
+
+          <div class="small" style="margin-top:10px; color:var(--ink-faint)">
+            Next flag after this: <strong>"Confirm no other recoup categories"</strong> (specialty backline, hospitality overage, production overage) — the Hwang-pattern prevention.
+          </div>
+
+          <div class="actions">
+            <span class="btn primary">Confirm choice</span>
+            <span class="btn">Cancel</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    <strong>Why this is the centerpiece:</strong> the canonical Coastal Spell dispute was exactly this question, 90 days late, $720 on the line. Forcing the choice at capture time prevents that loop. The second flag (next in the queue) is what prevents the <strong>Hwang pattern</strong> — 5 of his 6 hidden marketing-recoup pushbacks happened because nobody asked "did the deal cover this category in the first place?" Option C is the taxonomy-extension hatch the brief promised Mariana.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s6">
+  <div class="screen-title"><span>Screen 6 · Resolved + send for approval</span><span class="num">6 / 11</span></div>
+  <div class="screen-body">
+    <div class="chrome">
+      <div class="nav">
+        <div class="logo">Greenroom</div>
+        <ul>
+          <li>Shows</li>
+          <li>Artists</li>
+          <li class="active">Deals</li>
+          <li>Reports</li>
+        </ul>
+      </div>
+      <div class="main">
+        <div class="eyebrow">Draft deal · ready to send</div>
+        <div class="page-h1">Coastal Spell <span class="h1-sub">· 2026-06-14</span></div>
+
+        <div class="box">
+          <span class="pill neutral">draft</span>
+          <span class="small">all fields resolved — ready for agent approval</span>
+        </div>
+
+        <div class="box">
+          <div class="box-title">Deal terms</div>
+          <div class="field"><span class="label">Guarantee</span><span class="val">$4,500</span><span class="tag tag-ok">✓ ok</span></div>
+          <div class="field"><span class="label">Artist split %</span><span class="val">85% after expenses</span><span class="tag tag-ok">✓ ok</span></div>
+          <div class="field"><span class="label">Expense cap</span><span class="val">$3,200</span><span class="tag tag-ok">✓ ok</span></div>
+          <div class="field" style="border-bottom:0; padding-bottom:4px"><span class="label" style="font-weight:600">Recoups</span><span class="val" style="font-size:11px; color:var(--ink-faint)">1 line · others confirmed none</span><span class="tag tag-ok">resolved</span></div>
+          <div class="field" style="padding-left:14px"><span class="label">↳ Marketing</span><span class="val">cap $500 · on top of cap</span><span class="tag tag-ok">✓</span></div>
+          <div class="field"><span class="label">Walkout pot</span><span class="val">$200</span><span class="tag tag-ok">✓ ok</span></div>
+        </div>
+
+        <div class="actions">
+          <span class="btn primary">Send to Daniel Hwang for approval</span>
+          <span class="btn">Save draft</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    State transition: <code>DRAFT → SENT TO AGENT</code>. Both sides now hold the same artifact.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s7">
+  <div class="screen-title"><span>Screen 7 · Agent email view (mock)</span><span class="num">7 / 11</span></div>
+  <div class="screen-body">
+    <div class="email-wrap">
+      <div class="email">
+        <div class="from">
+          <strong>From:</strong> Mariana Reyes via Greenroom &lt;noreply@greenroom.app&gt;<br/>
+          <strong>To:</strong> Daniel Hwang &lt;daniel@wme.com&gt;<br/>
+          <strong>Subject:</strong> Deal terms — Coastal Spell @ The Crescent, 2026-06-14
+        </div>
+
+        <h3>Deal terms for your approval</h3>
+        <p>Hi Daniel — here's the structured deal for Coastal Spell, parsed from your email. Approve if it matches your intent, or send back with a note.</p>
+
+        <div class="terms">
+          DEAL TYPE     :  V1 · standard vs net<br/>
+          SHOW          :  Coastal Spell @ The Crescent, 2026-06-14<br/>
+          GUARANTEE     :  $4,500<br/>
+          ARTIST SPLIT  :  85% of net after expenses<br/>
+          EXPENSE CAP   :  $3,200<br/>
+          RECOUPS       :<br/>
+          &nbsp;&nbsp;· Marketing — cap $500 — ON TOP OF the expense cap<br/>
+          &nbsp;&nbsp;· (no other categories — confirmed not allowed)<br/>
+          WALKOUT POT   :  $200<br/>
+          BONUS         :  —<br/>
+        </div>
+
+        <p style="margin-top:18px">
+          <span class="btn primary">✓ Approve &amp; lock</span>
+          <span class="btn">↺ Send back</span>
+        </p>
+
+        <p class="small" style="margin-top:22px; color:var(--ink-faint); border-top:1px solid var(--line-faint); padding-top:14px">
+          Approving locks both sides to these terms. If terms change later (phone call, amendment), you'll get a drift notice with the diff.
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    Prototype reality: actual email send is mocked. Build a route that renders this view; the buttons hit real callback URLs.
+    Fallback if mocking emails is messy: in-app "View as Agent" toggle.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s8">
+  <div class="screen-title"><span>Screen 8 · Send-back received</span><span class="num">8 / 11</span></div>
+  <div class="screen-body">
+    <div class="chrome">
+      <div class="nav">
+        <div class="logo">Greenroom</div>
+        <ul>
+          <li>Shows</li>
+          <li>Artists</li>
+          <li class="active">Deals</li>
+          <li>Reports</li>
+        </ul>
+      </div>
+      <div class="main">
+        <div class="eyebrow">Deal · awaiting changes</div>
+        <div class="page-h1">Coastal Spell <span class="h1-sub">· 2026-06-14</span></div>
+
+        <div class="box">
+          <span class="pill warn">sent back</span>
+          <span class="small">by Daniel Hwang · 9:14am</span>
+        </div>
+
+        <div class="box warn">
+          <div class="box-title">Daniel's note</div>
+          "Marketing recoup should be IN the cap, not on top. My fault — email was unclear."
+        </div>
+
+        <div class="box">
+          <div class="box-title">Edit the flagged line</div>
+          <div class="field">
+            <span class="label">Recoups · Marketing</span>
+            <span class="val">
+              <span class="diff-old">cap $500 · on top of cap</span><br/>
+              <span class="diff-new">→ cap $500 · in cap</span>
+            </span>
+            <span class="tag tag-ok">edited</span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <span class="btn primary">Re-send for approval</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    State: <code>SENT TO AGENT → SENT BACK</code> (with reason) → <code>DRAFT (editing) → SENT TO AGENT</code>.
+    Same loop until Approve. This is also the deal that lives in the <em>Sent back to me</em> queue on screen 1.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s9">
+  <div class="screen-title"><span>Screen 9 · Approved &amp; locked + version history</span><span class="num">9 / 11</span></div>
+  <div class="screen-body">
+    <div class="chrome">
+      <div class="nav">
+        <div class="logo">Greenroom</div>
+        <ul>
+          <li>Shows</li>
+          <li>Artists</li>
+          <li class="active">Deals</li>
+          <li>Reports</li>
+        </ul>
+      </div>
+      <div class="main">
+        <div class="eyebrow">Deal · locked</div>
+        <div class="page-h1">Coastal Spell <span class="h1-sub">· 2026-06-14</span></div>
+
+        <div class="box ok">
+          <span class="pill ok">approved &amp; locked</span>
+          <span class="small">both sides hold the same terms</span>
+        </div>
+
+        <div class="row">
+          <div class="box">
+            <div class="box-title">Locked terms</div>
+            <div class="field"><span class="label">Guarantee</span><span class="val">$4,500</span><span class="tag tag-ok">✓</span></div>
+            <div class="field"><span class="label">Artist split</span><span class="val">85% after exp.</span><span class="tag tag-ok">✓</span></div>
+            <div class="field"><span class="label">Expense cap</span><span class="val">$3,200</span><span class="tag tag-ok">✓</span></div>
+            <div class="field" style="border-bottom:0; padding-bottom:4px"><span class="label" style="font-weight:600">Recoups</span><span class="val" style="font-size:11px; color:var(--ink-faint)">1 line</span><span class="tag tag-ok">✓</span></div>
+            <div class="field" style="padding-left:14px"><span class="label">↳ Marketing</span><span class="val">$500 · in cap</span><span class="tag tag-ok">✓</span></div>
+            <div class="field"><span class="label">Walkout pot</span><span class="val">$200</span><span class="tag tag-ok">✓</span></div>
+          </div>
+          <div class="box">
+            <div class="box-title">Version history</div>
+            <div class="timeline">
+              <div class="item">
+                <span class="when">2026-05-19 · 11:42pm</span><br/>
+                v1 created by Mariana — AI-parsed from Daniel's email
+              </div>
+              <div class="item">
+                <span class="when">2026-05-19 · 11:48pm</span><br/>
+                v1 sent to Daniel for approval
+              </div>
+              <div class="item sentback">
+                <span class="when">2026-05-20 · 9:14am</span><br/>
+                v1 sent back by Daniel — "marketing recoup should be from cap"
+              </div>
+              <div class="item">
+                <span class="when">2026-05-20 · 9:32am</span><br/>
+                v2 edited by Mariana — <code>recoups[marketing].treatment: on_top_of_cap → in_cap</code>
+              </div>
+              <div class="item lock">
+                <span class="when">2026-05-20 · 9:51am</span><br/>
+                <strong>v2 approved by Daniel — LOCKED</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    Version history is a plain chronological list (per spec — not a diff viewer). It's the receipt log Sarah Kim asked for: she can see receipts exist without having to read them.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s10">
+  <div class="screen-title"><span>Screen 10 · Drift (v2 / path-to-optimization)</span><span class="num">10 / 11</span></div>
+  <div class="screen-body">
+    <div class="not-built">
+      <strong>not in v1</strong> Documented as the natural follow-up. v1 ships with "lock = immutable." Drift handling is the second iteration.
+    </div>
+
+    <div class="chrome">
+      <div class="nav">
+        <div class="logo">Greenroom</div>
+        <ul>
+          <li>Shows</li>
+          <li>Artists</li>
+          <li class="active">Deals</li>
+          <li>Reports</li>
+        </ul>
+      </div>
+      <div class="main">
+        <div class="eyebrow">Deal · drifted</div>
+        <div class="page-h1">Coastal Spell <span class="h1-sub">· 2026-06-14</span></div>
+
+        <div class="box warn">
+          <span class="pill warn">drifted</span>
+          <span class="small">Mariana edited a locked field. Daniel notified. Re-approval pending.</span>
+        </div>
+
+        <div class="box">
+          <div class="box-title">What changed · phone call amendment, 2026-06-10</div>
+          <div class="field">
+            <span class="label">Walkout pot</span>
+            <span class="val">
+              <span class="diff-old">$200</span> →
+              <span class="diff-warn">$300</span>
+            </span>
+            <span class="tag tag-warn">drift</span>
+          </div>
+          <div class="small" style="margin-top:8px">Mariana's note: "Phone call with Daniel on 6/10 — bumped pot."</div>
+        </div>
+
+        <div class="box muted">
+          <div class="box-title">Auto-generated drift email to Daniel</div>
+          Same approve / send-back surface as initial capture. Re-locks on approval.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    <strong>Scope decision:</strong> Drift mechanic is real (phone-call amendments happen) but reuses the same email + approval surface. Cuttable if v1 build runs hot. Memo names this as path-to-optimization.
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<div class="screen" id="s11">
+  <div class="screen-title"><span>Screen 11 · Settlement-against-locked-deal (next ship)</span><span class="num">11 / 11</span></div>
+  <div class="screen-body">
+    <div class="not-built">
+      <strong>next ship</strong> Not built in this prototype. Named in the memo as the immediate next ship. ~2–3 hours of work since it reuses the deal artifact, state machine, and approval surface.
+    </div>
+
+    <div class="chrome">
+      <div class="nav">
+        <div class="logo">Greenroom</div>
+        <ul>
+          <li>Shows</li>
+          <li>Artists</li>
+          <li class="active">Deals</li>
+          <li>Reports</li>
+        </ul>
+      </div>
+      <div class="main">
+        <div class="eyebrow">Settlement · post-show</div>
+        <div class="page-h1">Coastal Spell <span class="h1-sub">· 2026-06-14</span></div>
+
+        <div class="box">
+          <div class="box-title">Math · each line links to the deal field that defines it</div>
+          <div class="field">
+            <span class="label">Gross</span>
+            <span class="val">$8,420</span>
+            <span class="tag tag-mute">tickets</span>
+          </div>
+          <div class="field">
+            <span class="label">– Expenses (capped at $3,200)</span>
+            <span class="val">$3,200</span>
+            <span class="tag"><a href="#s9" style="color:var(--ink-soft); text-decoration:underline; text-decoration-style:dotted">deal · cap ↗</a></span>
+          </div>
+          <div class="field">
+            <span class="label">– Marketing recoup (from cap)</span>
+            <span class="val">$0 (already in cap)</span>
+            <span class="tag"><a href="#s9" style="color:var(--ink-soft); text-decoration:underline; text-decoration-style:dotted">deal · recoup ↗</a></span>
+          </div>
+          <div class="field">
+            <span class="label">= Net</span>
+            <span class="val">$5,220</span>
+            <span class="tag tag-ok">calc</span>
+          </div>
+          <div class="field">
+            <span class="label">Artist share (85%)</span>
+            <span class="val">$4,437</span>
+            <span class="tag"><a href="#s9" style="color:var(--ink-soft); text-decoration:underline; text-decoration-style:dotted">deal · split ↗</a></span>
+          </div>
+          <div class="field math-total">
+            <span class="label">vs Guarantee ($4,500) — pay guarantee</span>
+            <span class="val">$4,500</span>
+            <span class="tag tag-ok">winner</span>
+          </div>
+        </div>
+
+        <div class="box muted">
+          <div class="box-title">Send settlement to Daniel for approval</div>
+          Same UX as deal. Locks the post-show ledger.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="screen-note">
+    Why the pair is mechanically tight: same schema, same state machine, same email/approval UX, same versioning. The deal artifact is the contract before the show and the ledger after. Settlement is just the second half of the same product surface.
+    <strong>Adjacent low-cost win (named in memo, not built):</strong> surface line-item recoup disputes alongside the badge. Closes the 22 hidden disputes the in-app Reports tab misses today — pure UX on data that already exists.
+  </div>
+</div>
+
+</body>
+</html>

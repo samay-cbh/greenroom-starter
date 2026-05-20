@@ -230,3 +230,31 @@ export async function getReports() {
 }
 
 export type Reports = Awaited<ReturnType<typeof getReports>>;
+
+// -------- Deal capture (prototype slice) --------
+
+export async function getArtistsList() {
+  return db
+    .select({ id: artists.id, name: artists.name, agentId: artists.agentId })
+    .from(artists)
+    .orderBy(asc(artists.name));
+}
+
+export async function getAgentsList() {
+  return db
+    .select({
+      id: agents.id,
+      name: agents.name,
+      email: agents.email,
+      agencyId: agents.agencyId,
+    })
+    .from(agents)
+    .orderBy(asc(agents.name));
+}
+
+export async function getAgenciesList() {
+  return db
+    .select({ id: agencies.id, name: agencies.name })
+    .from(agencies)
+    .orderBy(asc(agencies.name));
+}
