@@ -13,6 +13,7 @@ import {
   comps,
   expenses,
   settlements,
+  settlementInterpretations,
   venues,
   type Recoup,
 } from "@/db/schema";
@@ -101,6 +102,27 @@ export async function getShowById(id: string) {
 export type ShowWithRelations = NonNullable<
   Awaited<ReturnType<typeof getShowById>>
 >;
+
+export async function getLatestSettlementInterpretation(showId: string) {
+  const rows = await db
+    .select()
+    .from(settlementInterpretations)
+    .where(eq(settlementInterpretations.showId, showId))
+    .orderBy(desc(settlementInterpretations.confirmedAt))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+export async function getSettlementInterpretationById(id: string) {
+  const rows = await db
+    .select()
+    .from(settlementInterpretations)
+    .where(eq(settlementInterpretations.id, id))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
 
 /** All artists with show counts. */
 export async function getAllArtists() {

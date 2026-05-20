@@ -1062,13 +1062,8 @@ async function main() {
     (s) => s.status !== "draft" && s.status !== "voided",
   );
   // Helpers
-  const findShow = (id: string) => showsToInsert.find((s) => s.id === id);
-  const findDeal = (showId: string) =>
-    dealsToInsert.find((d) => d.showId === showId);
   const findSettlement = (showId: string) =>
     settlementsToInsert.find((s) => s.showId === showId);
-  const findComps = (showId: string) =>
-    compsToInsert.filter((c) => c.showId === showId);
   const findExpenses = (showId: string) =>
     expensesToInsert.filter((e) => e.showId === showId);
 

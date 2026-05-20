@@ -281,6 +281,32 @@ export const settlements = sqliteTable("settlements", {
   notes: text("notes"),
 });
 
+// -------- Settlement interpretations --------
+
+/**
+ * Append-only audit records for AI-assisted deal interpretation.
+ *
+ * These do not mutate the original deals table. Each row captures what Mariana
+ * confirmed from the prose, the structured-field divergences she reviewed, and
+ * any ambiguity resolutions that affected the settlement artifact.
+ */
+export const settlementInterpretations = sqliteTable(
+  "settlement_interpretations",
+  {
+    id: text("id").primaryKey(),
+    showId: text("show_id")
+      .notNull()
+      .references(() => shows.id),
+
+    confirmedDealTermsJson: text("confirmed_deal_terms_json").notNull(),
+    divergenceLogJson: text("divergence_log_json").notNull(),
+    ambiguityResolutionsJson: text("ambiguity_resolutions_json").notNull(),
+
+    confirmedBy: text("confirmed_by").notNull(),
+    confirmedAt: integer("confirmed_at", { mode: "timestamp" }).notNull(),
+  },
+);
+
 // -------- Type exports for convenience --------
 
 export type User = typeof users.$inferSelect;
@@ -294,6 +320,8 @@ export type TicketSale = typeof ticketSales.$inferSelect;
 export type Comp = typeof comps.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type Settlement = typeof settlements.$inferSelect;
+export type SettlementInterpretation =
+  typeof settlementInterpretations.$inferSelect;
 
 // -------- Decoded JSON helpers --------
 
