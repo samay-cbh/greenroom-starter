@@ -6,6 +6,10 @@ import {
   AlertCircle,
   Clock,
   TrendingUp,
+  History,
+  Receipt,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { getShowById } from "@/lib/queries";
 import {
@@ -26,6 +30,9 @@ import {
   relativeShowDate,
 } from "@/lib/format";
 import type { Bonus } from "@/db/schema";
+import { DealTimeline } from "./components/deal-timeline";
+import { DealVisualizer } from "./components/deal-visualizer";
+import { SettlementCalculator } from "./components/settlement-calculator";
 
 const COMP_LABELS: Record<string, string> = {
   artist_gl: "Artist guest list",
@@ -56,6 +63,7 @@ export default async function ShowDetailPage({
     ticketSales,
     expenses,
     comps,
+    dealVersions,
   } = data;
 
   const grossSoFar = ticketSales.reduce((sum, t) => sum + t.gross, 0);
@@ -74,13 +82,22 @@ export default async function ShowDetailPage({
     .reduce((s, c) => s + c.count, 0);
 
   const bonuses = deal ? parseBonuses(deal) : [];
-
   const isDisputed = settlement?.status === "disputed";
+
+  // Expense category totals
+  const expenseByCategory: Record<string, number> = {};
+  for (const e of expenses.filter((e) => !e.absorbedByVenue)) {
+    expenseByCategory[e.category] = (expenseByCategory[e.category] ?? 0) + e.amount;
+  }
+
+  // Proof simulation: expenses have proof if they have a description
+  const expensesWithProofCount = expenses.filter((e) => e.description).length;
+  const proofRate = expenses.length > 0 ? expensesWithProofCount / expenses.length : 1;
 
   return (
     <div className="max-w-7xl">
       {/* Poster header */}
-      <div className={`px-12 pt-10 pb-14 ${isDisputed ? "bg-gradient-to-b from-rose-50/40 to-canvas" : "bg-gradient-to-b from-brand-50/30 to-canvas"}`}>
+      <div className={`px-12 pt-10 pb-10 ${isDisputed ? "bg-linear-to-b from-rose-50/40 to-canvas" : "bg-linear-to-b from-brand-50/30 to-canvas"}`}>
         <Link
           href="/shows"
           className="inline-flex items-center gap-1 text-[12px] text-ink-400 hover:text-ink-900 mb-8 transition-colors"
@@ -103,7 +120,7 @@ export default async function ShowDetailPage({
               )}
             </div>
             <h1
-              className="font-display text-[56px] font-medium text-ink-900 leading-[1.02]"
+              className="font-display text-[48px] font-medium text-ink-900 leading-[1.02]"
               style={{ letterSpacing: "-0.025em", fontOpticalSizing: "auto" }}
             >
               {artist?.name ?? "—"}
@@ -153,320 +170,306 @@ export default async function ShowDetailPage({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-2">
-          {/* Deal terms */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <div>
-                <CardTitle>Deal terms</CardTitle>
-                <CardDescription>
-                  What was negotiated. Mariana enters this from the email
-                  thread with the agent.
-                </CardDescription>
-              </div>
-              {deal && <DealTypeBadge type={deal.dealType} />}
-            </CardHeader>
-            <CardContent className="space-y-5">
-              {deal ? (
-                <>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <Field
-                      label="Guarantee"
-                      mono
-                      value={
-                        deal.guaranteeAmount != null
-                          ? formatMoney(deal.guaranteeAmount)
-                          : "—"
-                      }
-                    />
-                    <Field
-                      label="Percentage"
-                      mono
-                      value={
-                        deal.percentage != null
-                          ? `${(deal.percentage * 100).toFixed(0)}% ${deal.percentageBasis ? `of ${deal.percentageBasis}` : ""}`
-                          : "—"
-                      }
-                    />
-                    <Field
-                      label="Expense cap"
-                      mono
-                      value={
-                        deal.expenseCap != null
-                          ? formatMoney(deal.expenseCap)
-                          : "—"
-                      }
-                    />
-                    <Field
-                      label="Hospitality cap"
-                      mono
-                      value={
-                        deal.hospitalityCap != null
-                          ? formatMoney(deal.hospitalityCap)
-                          : "—"
-                      }
-                    />
+        {/* Main grid: left content + right calculator */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 mt-2">
+          {/* Left column */}
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* Deal terms */}
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <div>
+                    <CardTitle>Deal terms</CardTitle>
+                    <CardDescription>
+                      Negotiated via email with the agent.
+                    </CardDescription>
                   </div>
+                  {deal && <DealTypeBadge type={deal.dealType} />}
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {deal ? (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <Field label="Guarantee" mono value={deal.guaranteeAmount != null ? formatMoney(deal.guaranteeAmount) : "—"} />
+                        <Field label="Percentage" mono value={deal.percentage != null ? `${(deal.percentage * 100).toFixed(0)}% ${deal.percentageBasis ? `of ${deal.percentageBasis}` : ""}` : "—"} />
+                        <Field label="Expense cap" mono value={deal.expenseCap != null ? formatMoney(deal.expenseCap) : "—"} />
+                        <Field label="Hospitality cap" mono value={deal.hospitalityCap != null ? formatMoney(deal.hospitalityCap) : "—"} />
+                      </div>
 
-                  {bonuses.length > 0 && (
-                    <div className="rounded-lg ring-1 ring-brand-200/50 bg-brand-50/20 p-4">
-                      <div className="flex items-center gap-1.5 mb-2.5">
-                        <TrendingUp className="h-3.5 w-3.5 text-brand-700" />
-                        <div className="eyebrow text-[10px] text-brand-800">
-                          Bonuses & escalators (structured)
+                      {bonuses.length > 0 && (
+                        <div className="rounded-lg ring-1 ring-brand-200/50 bg-brand-50/20 p-4">
+                          <div className="flex items-center gap-1.5 mb-2.5">
+                            <TrendingUp className="h-3.5 w-3.5 text-brand-700" />
+                            <div className="eyebrow text-[10px] text-brand-800">
+                              Bonuses & escalators (structured)
+                            </div>
+                          </div>
+                          <ul className="space-y-2">
+                            {bonuses.map((b, i) => (
+                              <li key={i} className="text-[12.5px] text-ink-800 flex items-start gap-2">
+                                <BonusBadge type={b.type} />
+                                <span className="leading-relaxed">{b.label}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
-                      </div>
-                      <ul className="space-y-2">
-                        {bonuses.map((b, i) => (
-                          <li
-                            key={i}
-                            className="text-[12.5px] text-ink-800 flex items-start gap-2"
-                          >
-                            <BonusBadge type={b.type} />
-                            <span className="leading-relaxed">{b.label}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="text-[11px] text-ink-400 mt-3 leading-snug">
-                        Stored in{" "}
-                        <code className="font-mono text-[10px] bg-white/80 px-1 py-0.5 rounded ring-1 ring-ink-200/40">
-                          bonuses_json
-                        </code>
-                        . The in-app tool only reads structured bonuses — anything
-                        in the prose below is invisible to it.
-                      </div>
-                    </div>
-                  )}
+                      )}
 
-                  {deal.dealNotesFreetext && (
+                      {/* Deal visualizer */}
+                      <div className="rounded-lg ring-1 ring-ink-200/50 bg-ink-50/30 p-4">
+                        <DealVisualizer
+                          deal={deal}
+                          grossBoxOffice={grossSoFar}
+                          totalExpenses={totalExpenses}
+                          artistPayout={settlement?.totalToArtist ?? null}
+                        />
+                      </div>
+
+                      {deal.dealNotesFreetext && (
+                        <div>
+                          <div className="eyebrow text-[10px] text-ink-500 mb-2">
+                            Deal notes (free text — what Mariana actually trusts)
+                          </div>
+                          <div className="text-[13px] text-ink-800 bg-canvas-soft rounded-lg p-4 ring-1 ring-ink-200/50 leading-relaxed font-[450]" style={{ fontStyle: "italic" }}>
+                            {deal.dealNotesFreetext}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[13px] text-ink-400">No deal entered yet.</div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Artist & agent */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Artist & agent</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Field label="Artist" value={artist?.name ?? "—"} />
+                  <Field label="Genre" value={<span className="capitalize">{artist?.genre ?? "—"}</span>} />
+                  <Field label="Prior shows here" value={String(artist?.priorShowCount ?? 0)} mono />
+                  <Field label="Agent" value={agent ? `${agent.name}${agency ? ` · ${agency.name}` : ""}` : "—"} />
+                  {agent?.preferencesNotes && (
                     <div>
-                      <div className="eyebrow text-[10px] text-ink-500 mb-2">
-                        Deal notes (free text — what Mariana actually trusts)
-                      </div>
-                      <div className="text-[13px] text-ink-800 bg-canvas-soft rounded-lg p-4 ring-1 ring-ink-200/50 leading-relaxed font-[450]" style={{ fontStyle: "italic" }}>
-                        {deal.dealNotesFreetext}
+                      <div className="eyebrow text-[10px] text-ink-500 mb-2">Agent notes</div>
+                      <div className="text-[12.5px] text-ink-800 bg-amber-50/50 ring-1 ring-amber-200/50 rounded-lg p-3 leading-relaxed">
+                        {agent.preferencesNotes}
                       </div>
                     </div>
                   )}
-                </>
-              ) : (
-                <div className="text-[13px] text-ink-400">
-                  No deal entered yet.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Artist & agent */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Artist & agent</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Field label="Artist" value={artist?.name ?? "—"} />
-              <Field
-                label="Genre"
-                value={
-                  <span className="capitalize">{artist?.genre ?? "—"}</span>
-                }
-              />
-              <Field
-                label="Prior shows here"
-                value={String(artist?.priorShowCount ?? 0)}
-                mono
-              />
-              <Field
-                label="Agent"
-                value={
-                  agent
-                    ? `${agent.name}${agency ? ` · ${agency.name}` : ""}`
-                    : "—"
-                }
-              />
-              {agent?.preferencesNotes && (
+            {/* Box office breakdown */}
+            <Card>
+              <CardHeader>
                 <div>
-                  <div className="eyebrow text-[10px] text-ink-500 mb-2">
-                    Agent notes
-                  </div>
-                  <div className="text-[12.5px] text-ink-800 bg-amber-50/50 ring-1 ring-amber-200/50 rounded-lg p-3 leading-relaxed">
-                    {agent.preferencesNotes}
-                  </div>
+                  <CardTitle>Gross box office breakdown</CardTitle>
+                  <CardDescription>From integrated ticketing. What counts toward gross.</CardDescription>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 divide-y divide-ink-100/60">
+                  <BORow label="Ticket revenue (gross)" value={formatMoney(grossSoFar)} bold />
+                  <BORow label="Ticket fees" value={`− ${formatMoney(totalFees)}`} muted />
+                  {compsCountingTowardGross > 0 && (
+                    <BORow
+                      label={`Comps counting toward gross (${compsCountingTowardGross} tickets)`}
+                      value={`+ ${formatMoney(comps.filter((c) => c.countsTowardGross).reduce((s, c) => s + c.count * c.faceValue, 0))}`}
+                      warn
+                    />
+                  )}
+                  <BORow
+                    label="Net box office"
+                    value={formatMoney(grossSoFar - totalFees)}
+                    bold
+                  />
+                  <BORow label="Total expenses (passed through)" value={`− ${formatMoney(totalExpenses)}`} muted />
+                  <BORow label="Net after expenses" value={formatMoney(grossSoFar - totalFees - totalExpenses)} bold accent />
+                </div>
+                <div className="mt-3 text-[10.5px] text-ink-400 leading-snug">
+                  {totalTickets} tickets sold · {totalCompCount} comps across {comps.length} categories
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Box office */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Box office</CardTitle>
-              <CardDescription>From integrated ticketing.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
+            {/* Expenses with proof indicators */}
+            <Card>
+              <CardHeader>
                 <div>
-                  <div className="eyebrow text-[10px] text-ink-400">Gross</div>
-                  <div className="text-[28px] font-mono tabular font-semibold text-ink-900 mt-1 leading-none">
-                    {formatMoneyCompact(grossSoFar)}
-                  </div>
+                  <CardTitle>Expenses</CardTitle>
+                  <CardDescription>
+                    {expenses.length} line items · {Math.round(proofRate * 100)}% have descriptions
+                  </CardDescription>
                 </div>
-                {totalTickets > 0 ? (
-                  <div className="text-[12px] text-ink-500 pt-4 border-t border-ink-100/80 leading-relaxed">
-                    <span className="font-mono tabular font-medium text-ink-700">
-                      {totalTickets}
-                    </span>{" "}
-                    tickets ·{" "}
-                    <span className="font-mono tabular">
-                      {formatMoney(totalFees)}
-                    </span>{" "}
-                    in fees
-                    <div className="mt-1.5 text-ink-400">
-                      Net{" "}
-                      <span className="font-mono tabular text-ink-700">
-                        {formatMoneyCompact(grossSoFar - totalFees)}
-                      </span>
-                    </div>
-                  </div>
+                {absorbedTotal > 0 && (
+                  <PlainBadge variant="amber">{formatMoney(absorbedTotal)} absorbed</PlainBadge>
+                )}
+              </CardHeader>
+              <CardContent>
+                {expenses.length === 0 ? (
+                  <div className="text-[13px] text-ink-400">No expenses entered yet.</div>
                 ) : (
-                  <div className="text-[12px] text-ink-400 pt-3 border-t border-ink-100/80">
-                    No sales yet.
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="text-left border-b border-ink-100/80">
+                        <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold">Category</th>
+                        <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold">Description</th>
+                        <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold text-center w-16">Proof</th>
+                        <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-ink-100/60">
+                      {expenses.map((e) => (
+                        <tr key={e.id}>
+                          <td className="py-2.5 capitalize">
+                            {e.category}
+                            {e.absorbedByVenue && <PlainBadge variant="amber" className="ml-2">absorbed</PlainBadge>}
+                          </td>
+                          <td className="py-2.5 text-ink-500">{e.description ?? "—"}</td>
+                          <td className="py-2.5 text-center">
+                            {e.description ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-brand-600 mx-auto" />
+                            ) : (
+                              <XCircle className="h-3.5 w-3.5 text-ink-300 mx-auto" />
+                            )}
+                          </td>
+                          <td className="py-2.5 text-right font-mono tabular">{formatMoney(e.amount)}</td>
+                        </tr>
+                      ))}
+                      <tr className="font-medium">
+                        <td className="py-3" colSpan={3}>Total (passed through)</td>
+                        <td className="py-3 text-right font-mono tabular">{formatMoney(totalExpenses)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+
+                {/* Category totals */}
+                {Object.keys(expenseByCategory).length > 1 && (
+                  <div className="mt-4 pt-4 border-t border-ink-100/60">
+                    <div className="eyebrow text-[10px] text-ink-400 mb-2">By category</div>
+                    <div className="flex flex-wrap gap-3">
+                      {Object.entries(expenseByCategory)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([cat, amt]) => (
+                          <div key={cat} className="text-[11px]">
+                            <span className="text-ink-500 capitalize">{cat}:</span>{" "}
+                            <span className="font-mono tabular text-ink-700">{formatMoney(amt)}</span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Comps */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <div>
-                <CardTitle>Comps</CardTitle>
-                <CardDescription>
-                  {totalCompCount} comp tickets across {comps.length}{" "}
-                  categor{comps.length === 1 ? "y" : "ies"}.
-                  {compsCountingTowardGross > 0 && (
-                    <>
-                      {" "}
-                      <span className="text-amber-700 font-medium">
-                        {compsCountingTowardGross} count toward gross.
-                      </span>
-                    </>
-                  )}
-                </CardDescription>
-              </div>
-              <PlainBadge variant="default">
-                {totalCompCount} total
-              </PlainBadge>
-            </CardHeader>
-            <CardContent>
-              {comps.length === 0 ? (
-                <div className="text-[13px] text-ink-400">
-                  No comps recorded for this show.
+            {/* Comps */}
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle>Comps</CardTitle>
+                  <CardDescription>
+                    {totalCompCount} comp tickets across {comps.length} categor{comps.length === 1 ? "y" : "ies"}.
+                    {compsCountingTowardGross > 0 && (
+                      <> <span className="text-amber-700 font-medium">{compsCountingTowardGross} count toward gross.</span></>
+                    )}
+                  </CardDescription>
                 </div>
-              ) : (
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="text-left border-b border-ink-100/80">
-                      <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold">Category</th>
-                      <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold text-right">Count</th>
-                      <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold text-right">Face value</th>
-                      <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold text-right">Counts toward gross?</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-ink-100/60">
-                    {comps.map((c) => (
-                      <tr key={c.id}>
-                        <td className="py-2.5">
-                          {COMP_LABELS[c.category] ?? c.category}
-                          {c.notes && (
-                            <span className="text-ink-400 ml-1">· {c.notes}</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 text-right font-mono tabular">{c.count}</td>
-                        <td className="py-2.5 text-right font-mono tabular text-ink-500">
-                          {formatMoney(c.faceValue * c.count)}
-                        </td>
-                        <td className="py-2.5 text-right">
-                          {c.countsTowardGross ? (
-                            <span className="text-amber-700 font-medium">Yes</span>
-                          ) : (
-                            <span className="text-ink-400">No</span>
-                          )}
-                        </td>
+                <PlainBadge variant="default">{totalCompCount} total</PlainBadge>
+              </CardHeader>
+              <CardContent>
+                {comps.length === 0 ? (
+                  <div className="text-[13px] text-ink-400">No comps recorded.</div>
+                ) : (
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="text-left border-b border-ink-100/80">
+                        <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold">Category</th>
+                        <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold text-right">Count</th>
+                        <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold text-right">Face value</th>
+                        <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold text-right">Counts toward gross?</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+                    </thead>
+                    <tbody className="divide-y divide-ink-100/60">
+                      {comps.map((c) => (
+                        <tr key={c.id}>
+                          <td className="py-2.5">
+                            {COMP_LABELS[c.category] ?? c.category}
+                            {c.notes && <span className="text-ink-400 ml-1">· {c.notes}</span>}
+                          </td>
+                          <td className="py-2.5 text-right font-mono tabular">{c.count}</td>
+                          <td className="py-2.5 text-right font-mono tabular text-ink-500">{formatMoney(c.faceValue * c.count)}</td>
+                          <td className="py-2.5 text-right">
+                            {c.countsTowardGross ? (
+                              <span className="text-amber-700 font-medium">Yes</span>
+                            ) : (
+                              <span className="text-ink-400">No</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </CardContent>
+            </Card>
 
-          {/* Expenses */}
-          <Card className="md:col-span-3">
-            <CardHeader>
-              <div>
-                <CardTitle>Expenses</CardTitle>
-                <CardDescription>
-                  Entered during the week, often incompletely.
-                </CardDescription>
-              </div>
-              {absorbedTotal > 0 && (
-                <PlainBadge variant="amber">
-                  {formatMoney(absorbedTotal)} absorbed
-                </PlainBadge>
-              )}
-            </CardHeader>
-            <CardContent>
-              {expenses.length === 0 ? (
-                <div className="text-[13px] text-ink-400">
-                  No expenses entered yet.
+            {/* Deal version timeline */}
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle className="flex items-center gap-1.5">
+                    <History className="h-3.5 w-3.5 text-ink-400" />
+                    Deal history
+                  </CardTitle>
+                  <CardDescription>
+                    Timeline of changes, submissions, and decisions.
+                  </CardDescription>
                 </div>
-              ) : (
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="text-left border-b border-ink-100/80">
-                      <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold">Category</th>
-                      <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold">Description</th>
-                      <th className="py-2 eyebrow text-[10px] text-ink-400 font-semibold text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-ink-100/60">
-                    {expenses.map((e) => (
-                      <tr key={e.id}>
-                        <td className="py-2.5 capitalize">
-                          {e.category}
-                          {e.absorbedByVenue && (
-                            <PlainBadge variant="amber" className="ml-2">absorbed</PlainBadge>
-                          )}
-                        </td>
-                        <td className="py-2.5 text-ink-500">{e.description ?? "—"}</td>
-                        <td className="py-2.5 text-right font-mono tabular">{formatMoney(e.amount)}</td>
-                      </tr>
-                    ))}
-                    <tr className="font-medium">
-                      <td className="py-3" colSpan={2}>Total (passed through)</td>
-                      <td className="py-3 text-right font-mono tabular">{formatMoney(totalExpenses)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+                <PlainBadge variant="default">{dealVersions.length} events</PlainBadge>
+              </CardHeader>
+              <CardContent>
+                <DealTimeline versions={dealVersions} />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right column: Calculator */}
+          <div className="lg:sticky lg:top-6 lg:self-start">
+            {deal ? (
+              <SettlementCalculator
+                grossBoxOffice={grossSoFar}
+                fees={totalFees}
+                totalExpenses={totalExpenses}
+                guarantee={deal.guaranteeAmount}
+                percentage={deal.percentage}
+                percentageBasis={deal.percentageBasis}
+                dealType={deal.dealType}
+                showId={show.id}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Receipt className="h-8 w-8 text-ink-200 mx-auto mb-3" />
+                  <div className="text-[13px] text-ink-500">
+                    Enter deal terms to use the calculator.
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function MiniStat({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
+function MiniStat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
     <div>
       <div className="eyebrow text-[9px] text-ink-400">{label}</div>
@@ -488,5 +491,16 @@ function BonusBadge({ type }: { type: Bonus["type"] }) {
     <span className="inline-flex shrink-0 items-center px-1.5 py-px rounded text-[9px] font-mono uppercase tracking-wider bg-white ring-1 ring-brand-200/50 text-brand-800">
       {labels[type]}
     </span>
+  );
+}
+
+function BORow({ label, value, bold, muted, accent, warn }: { label: string; value: string; bold?: boolean; muted?: boolean; accent?: boolean; warn?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between py-2">
+      <span className={`text-[12.5px] ${muted ? "text-ink-400" : warn ? "text-amber-700" : "text-ink-600"}`}>{label}</span>
+      <span className={`font-mono tabular text-[13px] ${bold ? "font-semibold" : ""} ${accent ? "text-brand-700" : muted ? "text-ink-400" : warn ? "text-amber-700" : "text-ink-900"}`}>
+        {value}
+      </span>
+    </div>
   );
 }

@@ -1,4 +1,9 @@
 <div align="center">
+# Submission document:
+
+[PRD artifact Greenroom Case Prithvi](https://gemini.google.com/share/82dfaaef8131)
+
+---
 
 # Greenroom
 
@@ -77,14 +82,14 @@ You'll land on Mariana's home view at The Crescent. **Click "Where to start" in 
 
 You're logged in automatically as **Mariana Reyes**, lead booker at The Crescent (650-cap, Nashville). The product has these surfaces:
 
-| Route | What it is |
-|---|---|
-| `/shows` | Mariana's home view. 24 months of completed shows, searchable and grouped by month. |
-| `/shows/[id]` | Show detail. Deal terms, artist info, ticket sales, expenses, comps. |
-| `/shows/[id]/settle` | The in-app settlement worksheet. **Try it on a few shows.** |
-| `/artists` | Roster of artists who've played the venue, bucketed by frequency. |
-| `/reports` | Aggregate metrics. The numbers Pri (the CEO) is watching. |
-| `/context` | Orientation for you, the candidate. Linked from the sidebar. |
+| Route                | What it is                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `/shows`             | Mariana's home view. 24 months of completed shows, searchable and grouped by month. |
+| `/shows/[id]`        | Show detail. Deal terms, artist info, ticket sales, expenses, comps.                |
+| `/shows/[id]/settle` | The in-app settlement worksheet. **Try it on a few shows.**                         |
+| `/artists`           | Roster of artists who've played the venue, bucketed by frequency.                   |
+| `/reports`           | Aggregate metrics. The numbers Pri (the CEO) is watching.                           |
+| `/context`           | Orientation for you, the candidate. Linked from the sidebar.                        |
 
 ### Recommended path your first time through
 
@@ -100,16 +105,16 @@ You're logged in automatically as **Mariana Reyes**, lead booker at The Crescent
 
 Twenty-four months of synthetic operational data, designed to feel like a real venue:
 
-| Table | Approx rows | What it represents |
-|---|---|---|
-| `shows` | ~540 | 24 months of shows. The app displays only past shows (more appear as days pass). |
-| `artists` | 59 | Mix of recurring (A-tier, 4+ shows) and one-off (D-tier) acts |
-| `agents` | 14 | Across WME, CAA, Wasserman, Paradigm, and independents |
-| `deals` | ~540 | One per show. Mix is flat ~33%, vs ~33%, % of net ~24%, door ~5%, % of gross ~4% |
-| `ticket_sales` | ~540 | One summary row per show, with realistic sell-through distributions |
-| `comps` | ~1,900 | Comp tickets across 6 categories |
-| `expenses` | ~2,900 | Sound, lights, hospitality, marketing, production, backline |
-| `settlements` | ~540 | All shows have settlement data. Past shows display it; future shows hold it until their date arrives. |
+| Table          | Approx rows | What it represents                                                                                    |
+| -------------- | ----------- | ----------------------------------------------------------------------------------------------------- |
+| `shows`        | ~540        | 24 months of shows. The app displays only past shows (more appear as days pass).                      |
+| `artists`      | 59          | Mix of recurring (A-tier, 4+ shows) and one-off (D-tier) acts                                         |
+| `agents`       | 14          | Across WME, CAA, Wasserman, Paradigm, and independents                                                |
+| `deals`        | ~540        | One per show. Mix is flat ~33%, vs ~33%, % of net ~24%, door ~5%, % of gross ~4%                      |
+| `ticket_sales` | ~540        | One summary row per show, with realistic sell-through distributions                                   |
+| `comps`        | ~1,900      | Comp tickets across 6 categories                                                                      |
+| `expenses`     | ~2,900      | Sound, lights, hospitality, marketing, production, backline                                           |
+| `settlements`  | ~540        | All shows have settlement data. Past shows display it; future shows hold it until their date arrives. |
 
 A few things worth knowing:
 
@@ -217,10 +222,12 @@ Node.js isn't installed (or isn't on your PATH). Install from [nodejs.org](https
 Something else is using port 3000. Two options:
 
 **Stop the other thing first.**
+
 - Mac/Linux: `lsof -ti:3000 | xargs kill -9`
 - Windows: `netstat -ano | findstr :3000` then `taskkill /PID <pid> /F`
 
 **Or run on a different port:**
+
 ```bash
 npm run dev -- -p 3001
 ```
@@ -247,6 +254,7 @@ This drops the SQLite file and regenerates 24 months of data. Takes ~5 seconds. 
 ### Page looks ugly or buttons aren't visible
 
 Hard-refresh your browser to clear the CSS cache:
+
 - Mac: **⌘ + Shift + R**
 - Windows/Linux: **Ctrl + Shift + R**
 
