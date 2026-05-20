@@ -48,7 +48,37 @@ npm install
 
 This pulls down all the JavaScript packages the project needs. Takes about 60 seconds. You may see a few warnings — those are normal and safe to ignore.
 
-### 4. Start the app
+### 4. Configure live deal interpretation (optional)
+
+The settlement-artifact prototype can call the OpenAI API for live deal-term
+extraction. Add this to `.env` if you want live extraction on any show:
+
+```bash
+OPENAI_API_KEY=your_api_key_here
+```
+
+Optional:
+
+```bash
+OPENAI_MODEL=gpt-5.5
+```
+
+If `OPENAI_API_KEY` is not set, the app still runs. Deterministic mock
+extractions are available for the three anchor demo shows:
+`show_0001`, `show_0007`, and `show_coastal_spell_dispute`.
+
+### 5. Reset the local database
+
+Run this once after installing dependencies so the local SQLite database has
+the current schema, including `settlement_interpretations`:
+
+```bash
+npm run db:reset
+```
+
+This recreates `data/greenroom.db` from the checked-in schema and seed data.
+
+### 6. Start the app
 
 ```bash
 npm run dev
@@ -63,7 +93,7 @@ You'll see something like:
 ✓ Ready in 1.2s
 ```
 
-### 5. Open it in your browser
+### 7. Open it in your browser
 
 Go to **[http://localhost:3000](http://localhost:3000)**.
 
@@ -82,6 +112,7 @@ You're logged in automatically as **Mariana Reyes**, lead booker at The Crescent
 | `/shows` | Mariana's home view. 24 months of completed shows, searchable and grouped by month. |
 | `/shows/[id]` | Show detail. Deal terms, artist info, ticket sales, expenses, comps. |
 | `/shows/[id]/settle` | The in-app settlement worksheet. **Try it on a few shows.** |
+| `/shows/[id]/interpret` | AI-assisted deal interpretation, human confirmation, and shared settlement artifact. |
 | `/artists` | Roster of artists who've played the venue, bucketed by frequency. |
 | `/reports` | Aggregate metrics. The numbers Pri (the CEO) is watching. |
 | `/context` | Orientation for you, the candidate. Linked from the sidebar. |
@@ -93,6 +124,30 @@ You're logged in automatically as **Mariana Reyes**, lead booker at The Crescent
 3. Pick a Flat-deal show. Click **Settle**. See what works.
 4. Read `data/transcripts/*.md` and `data/ceo-memo.md`.
 5. Look at `data/dispute-thread.md`. Then press **⌘K** and search "Coastal Spell" to find the matching show.
+
+### Settlement artifact prototype
+
+This branch adds a focused prototype for settlement-time deal interpretation:
+
+1. Open a show and go to `/shows/[id]/settle`.
+2. Click **Interpret deal before settling**.
+3. The app parses `deal_notes_freetext`, compares extracted deal terms against
+   structured fields, surfaces divergences, and highlights ambiguous clauses.
+4. Mariana confirms the correct interpretation.
+5. The app saves an append-only `settlement_interpretations` audit record.
+6. The shared artifact renders the confirmed deal terms, source clauses,
+   worksheet math, and the artist payout.
+
+Anchor demo URLs:
+
+```text
+/shows/show_0001/interpret?mock=1
+/shows/show_0007/interpret?mock=1
+/shows/show_coastal_spell_dispute/interpret?mock=1
+```
+
+Use `?mock=1` for deterministic fixture mode. Omit it to use live OpenAI
+extraction when `OPENAI_API_KEY` is configured.
 
 ---
 
@@ -110,10 +165,11 @@ Twenty-four months of synthetic operational data, designed to feel like a real v
 | `comps` | ~1,900 | Comp tickets across 6 categories |
 | `expenses` | ~2,900 | Sound, lights, hospitality, marketing, production, backline |
 | `settlements` | ~540 | All shows have settlement data. Past shows display it; future shows hold it until their date arrives. |
+| `settlement_interpretations` | variable | Append-only confirmed interpretation records for the settlement artifact |
 
 A few things worth knowing:
 
-**The deal `notes_freetext` field is the truth.** The structured fields (`guarantee_amount`, `percentage`, `bonuses_json`, `expense_cap`) are filled inconsistently. Mariana enters deals as prose because the structured fields don't model the actual deals well. This mismatch is part of the realism.
+**The deal `deal_notes_freetext` field is the truth.** The structured fields (`guarantee_amount`, `percentage`, `bonuses_json`, `expense_cap`) are filled inconsistently. Mariana enters deals as prose because the structured fields don't model the actual deals well. This mismatch is part of the realism.
 
 **Vs deals come in flavors.** About a third of Vs deals are "standard." The rest mix in walkout pots, tier ratchets, and vs-gross variants. The current in-app tool can't settle most of these.
 
@@ -157,6 +213,7 @@ app/
   shows/                    # Show list with search + month grouping
   shows/[id]/               # Show detail (concert poster-style header)
   shows/[id]/settle/        # The settlement worksheet (hero number layout)
+  shows/[id]/interpret/     # Deal interpretation + shared settlement artifact
   artists/                  # Artist roster (card grid with genre dots)
   reports/                  # Aggregate metrics + craft gap analysis
   icon.svg                  # Brand favicon
@@ -169,7 +226,10 @@ components/
     sidebar.tsx             # Fixed sidebar with active nav state
     nav-links.tsx           # Client component for pathname-aware nav
 lib/
-  dealMath.ts               # The settlement engine (deliberately incomplete)
+  dealMath.ts               # Settlement engine for flat, % gross, and standard Vs deals
+  interpretation.ts         # LLM extraction contract, normalization, divergence checks
+  interpretation-fixtures.ts # Deterministic mock extractions for anchor demo shows
+  interpretation-types.ts   # Shared interpretation/artifact types
   queries.ts                # Server-side data fetching (past shows only)
   format.ts                 # Money + date helpers
 db/
@@ -186,6 +246,7 @@ data/                       # Markdown context + greenroom.db
 - **Next.js 16** (App Router) + **React 19** + **TypeScript**
 - **Tailwind CSS 4** with shadcn-style component primitives
 - **Drizzle ORM** + **libsql** (pure-JS SQLite — no native compile, no setup)
+- **OpenAI SDK** for server-side live deal-term extraction
 - **Fraunces** (variable serif, via `next/font/google`) for display headings
 - **Geist Sans / Mono** (self-hosted via the `geist` package) for body + code
 - **lucide-react** for icons, **date-fns** for dates
@@ -207,6 +268,32 @@ When you're done:
 ---
 
 ## Troubleshooting
+
+### Live extraction is not running
+
+Make sure `.env` contains `OPENAI_API_KEY`. If the key is missing, live
+extraction is disabled, but mock mode still works for:
+
+```text
+show_0001
+show_0007
+show_coastal_spell_dispute
+```
+
+### Validate the settlement artifact logic
+
+Run the pure-function assertions:
+
+```bash
+npx tsx scripts/interpretation-assertions.ts
+```
+
+Run the regular checks:
+
+```bash
+npx tsc --noEmit
+npm run build
+```
 
 ### "Command not found: npm" or "node is not recognized"
 
