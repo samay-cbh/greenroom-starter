@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sparkles, AlertTriangle, ChevronDown } from "lucide-react";
 import type { Deal } from "@/db/schema";
 import type { ParsedDealTerms } from "@/app/api/parse-deal/route";
@@ -15,6 +15,7 @@ interface Props {
   grossBoxOffice: number;
   totalFees: number;
   totalExpenses: number;
+  hospitalityExpenses: number;
   venueCapacity?: number;
   ticketsSold: number;
   artistName: string;
@@ -76,17 +77,24 @@ function runCalculation(
   grossBoxOffice: number,
   totalFees: number,
   totalExpenses: number,
+  hospitalityExpenses: number,
 ): CalcResult {
-  const cappedExpenses =
-    terms.expenseCap != null
-      ? Math.min(totalExpenses, terms.expenseCap)
-      : totalExpenses;
+  const otherExpenses = totalExpenses - hospitalityExpenses;
+  const hospitalityPassed = terms.hospitalityCap != null
+    ? Math.min(hospitalityExpenses, terms.hospitalityCap)
+    : hospitalityExpenses;
+  const subtotal = hospitalityPassed + otherExpenses;
+  const cappedExpenses = terms.expenseCap != null
+    ? Math.min(subtotal, terms.expenseCap)
+    : subtotal;
   const netBoxOffice = grossBoxOffice - totalFees - cappedExpenses;
 
-  const expenseCapNote =
-    terms.expenseCap != null && totalExpenses > terms.expenseCap
-      ? `Actual $${totalExpenses.toLocaleString()} → capped at $${terms.expenseCap.toLocaleString()} per deal`
-      : undefined;
+  const capParts: string[] = [];
+  if (terms.hospitalityCap != null && hospitalityExpenses > terms.hospitalityCap)
+    capParts.push(`hospitality $${hospitalityExpenses.toLocaleString()} → capped at $${terms.hospitalityCap.toLocaleString()}`);
+  if (terms.expenseCap != null && subtotal > terms.expenseCap)
+    capParts.push(`total $${subtotal.toLocaleString()} → capped at $${terms.expenseCap.toLocaleString()}`);
+  const expenseCapNote = capParts.length ? capParts.join("; ") : undefined;
 
   const bonusResult = applyBonuses(terms.bonuses, grossBoxOffice);
 
@@ -186,9 +194,27 @@ function runCalculation(
     };
   }
 
+  if (terms.dealType === "door") {
+    const payout = Math.max(0, grossBoxOffice - cappedExpenses);
+    return {
+      supported: true,
+      totalToArtist: payout + bonusResult.total,
+      grossBoxOffice,
+      netBoxOffice,
+      cappedExpenses,
+      steps: [
+        { label: "Gross box office", value: grossBoxOffice },
+        { label: "− Approved expenses", value: -cappedExpenses, note: expenseCapNote },
+        { label: "= Artist payout", value: payout },
+        ...bonusResult.steps,
+      ],
+      finalFormula: `gross − expenses = $${payout.toFixed(2)}`,
+    };
+  }
+
   return {
     supported: false,
-    unsupportedReason: `Door deal calculation isn't handled by the AI parser yet.`,
+    unsupportedReason: `Unrecognized deal type.`,
     totalToArtist: 0,
     grossBoxOffice,
     netBoxOffice,
@@ -217,6 +243,7 @@ export function AIDealParser({
   grossBoxOffice,
   totalFees,
   totalExpenses,
+  hospitalityExpenses,
   venueCapacity,
   artistName,
 }: Props) {
@@ -233,6 +260,34 @@ export function AIDealParser({
   const [hospitalityCap, setHospitalityCap] = useState<string>("");
 
   const hasNotes = !!deal.dealNotesFreetext?.trim();
+  const cacheKey = `greenroom-parsed-deal-${deal.id}`;
+
+  const applyTerms = (terms: ParsedDealTerms) => {
+    setParsed(terms);
+    setDealType(terms.dealType);
+    setGuaranteeAmount(terms.guaranteeAmount != null ? String(terms.guaranteeAmount) : "");
+    setPercentage(terms.percentage != null ? String((terms.percentage * 100).toFixed(1)) : "");
+    setExpenseCap(terms.expenseCap != null ? String(terms.expenseCap) : "");
+    setHospitalityCap(terms.hospitalityCap != null ? String(terms.hospitalityCap) : "");
+    setCalcResult(runCalculation(terms, grossBoxOffice, totalFees, totalExpenses, hospitalityExpenses));
+    setUiState("calculated");
+  };
+
+  useEffect(() => {
+    if (!hasNotes) return;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        const { terms, notesSnapshot } = JSON.parse(raw);
+        if (notesSnapshot === deal.dealNotesFreetext) {
+          applyTerms(terms);
+          return;
+        }
+      }
+    } catch {}
+    handleParse();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleParse = async () => {
     setUiState("loading");
@@ -257,13 +312,10 @@ export function AIDealParser({
         return;
       }
       const terms: ParsedDealTerms = data;
-      setParsed(terms);
-      setDealType(terms.dealType);
-      setGuaranteeAmount(terms.guaranteeAmount != null ? String(terms.guaranteeAmount) : "");
-      setPercentage(terms.percentage != null ? String((terms.percentage * 100).toFixed(1)) : "");
-      setExpenseCap(terms.expenseCap != null ? String(terms.expenseCap) : "");
-      setHospitalityCap(terms.hospitalityCap != null ? String(terms.hospitalityCap) : "");
-      setUiState("parsed");
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ terms, notesSnapshot: deal.dealNotesFreetext }));
+      } catch {}
+      applyTerms(terms);
     } catch {
       setError("Network error. Check your connection and try again.");
       setUiState("error");
@@ -282,7 +334,7 @@ export function AIDealParser({
       confidence: parsed?.confidence ?? "medium",
       aiNotes: parsed?.aiNotes ?? "",
     };
-    const result = runCalculation(terms, grossBoxOffice, totalFees, totalExpenses);
+    const result = runCalculation(terms, grossBoxOffice, totalFees, totalExpenses, hospitalityExpenses);
     setCalcResult(result);
     setUiState("calculated");
   };
@@ -480,8 +532,8 @@ export function AIDealParser({
               </div>
             )}
 
-            <Button onClick={handleCalculate} className="w-full sm:w-auto">
-              Run settlement calculation
+            <Button onClick={handleCalculate} variant="outline" className="w-full sm:w-auto">
+              Recalculate
             </Button>
           </CardContent>
         </Card>

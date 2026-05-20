@@ -106,10 +106,11 @@ Return the extracted terms as JSON matching this exact schema:
   });
 
   const rawText = message.content[0].type === "text" ? message.content[0].text : "";
+  const jsonText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
   let parsed: ParsedDealTerms;
   try {
-    parsed = JSON.parse(rawText);
+    parsed = JSON.parse(jsonText);
   } catch {
     return NextResponse.json(
       { error: "AI returned an unexpected response format. Try again." },

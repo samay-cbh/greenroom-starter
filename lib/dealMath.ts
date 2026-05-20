@@ -192,9 +192,7 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
         dealType: deal.dealType,
       };
     }
-    const cappedExpenses = deal.expenseCap != null
-      ? Math.min(totalExpenses, deal.expenseCap)
-      : totalExpenses;
+    const { capped: cappedExpenses, note: expenseCapNote } = computeCappedExpenses(expenses, deal.expenseCap, deal.hospitalityCap);
     const netBoxOffice = grossBoxOffice - totalFees - cappedExpenses;
     const payout = Math.max(0, netBoxOffice) * deal.percentage;
     const bonusResult = applyBonuses(parseBonuses(deal), {
@@ -206,10 +204,7 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
     const steps: { label: string; value: number; note?: string }[] = [
       { label: "Gross box office", value: grossBoxOffice },
       { label: "− Ticketing fees", value: -totalFees },
-      { label: "− Approved expenses", value: -cappedExpenses,
-        note: deal.expenseCap != null && totalExpenses > deal.expenseCap
-          ? `Capped at $${deal.expenseCap.toLocaleString()} (actual $${totalExpenses.toLocaleString()})`
-          : undefined },
+      { label: "− Approved expenses", value: -cappedExpenses, note: expenseCapNote },
       { label: "= Net box office", value: netBoxOffice },
       { label: `× ${(deal.percentage * 100).toFixed(0)}%`, value: payout },
       ...bonusResult.applied.map((b) => ({ label: b.label, value: b.amount, note: b.reason })),
@@ -237,9 +232,7 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
         dealType: deal.dealType,
       };
     }
-    const cappedExpenses = deal.expenseCap != null
-      ? Math.min(totalExpenses, deal.expenseCap)
-      : totalExpenses;
+    const { capped: cappedExpenses, note: expenseCapNote } = computeCappedExpenses(expenses, deal.expenseCap, deal.hospitalityCap);
     const netBoxOffice = grossBoxOffice - totalFees - cappedExpenses;
     const percentageSide = Math.max(0, netBoxOffice) * deal.percentage;
     const guaranteeSide = deal.guaranteeAmount;
@@ -259,10 +252,6 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
       tickets,
       capacity: venueCapacity,
     });
-
-    const expenseCapNote = deal.expenseCap != null && totalExpenses > deal.expenseCap
-      ? `Actual $${totalExpenses.toLocaleString()} → capped at $${deal.expenseCap.toLocaleString()} per deal`
-      : undefined;
 
     const steps: { label: string; value: number; note?: string }[] = [
       { label: "Flat guarantee", value: guaranteeSide, note: guaranteeWon ? "Applied — highest option" : "Not applied" },
@@ -299,6 +288,31 @@ export function calculateSettlement(input: CalcInput): SettlementCalculation {
     dealType: deal.dealType,
     reason: "Door deals aren't supported in the in-app tool yet.",
   };
+}
+
+function computeCappedExpenses(
+  expenses: Expense[],
+  expenseCap: number | null | undefined,
+  hospitalityCap: number | null | undefined,
+): { capped: number; note: string | undefined } {
+  const hospitality = expenses
+    .filter(e => !e.absorbedByVenue && e.category === "hospitality")
+    .reduce((s, e) => s + e.amount, 0);
+  const other = expenses
+    .filter(e => !e.absorbedByVenue && e.category !== "hospitality")
+    .reduce((s, e) => s + e.amount, 0);
+
+  const hospitalityPassed = hospitalityCap != null ? Math.min(hospitality, hospitalityCap) : hospitality;
+  const subtotal = hospitalityPassed + other;
+  const capped = expenseCap != null ? Math.min(subtotal, expenseCap) : subtotal;
+
+  const parts: string[] = [];
+  if (hospitalityCap != null && hospitality > hospitalityCap)
+    parts.push(`hospitality $${hospitality.toLocaleString()} → capped at $${hospitalityCap.toLocaleString()}`);
+  if (expenseCap != null && subtotal > expenseCap)
+    parts.push(`total $${subtotal.toLocaleString()} → capped at $${expenseCap.toLocaleString()}`);
+
+  return { capped, note: parts.length ? parts.join("; ") : undefined };
 }
 
 /** Evaluate a list of bonuses against the show's actual numbers. */
