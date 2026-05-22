@@ -6,8 +6,10 @@ import {
   AlertCircle,
   Clock,
   TrendingUp,
+  FileCheck2,
+  Sparkles,
 } from "lucide-react";
-import { getShowById } from "@/lib/queries";
+import { getShowById, getLatestBriefForShow } from "@/lib/queries";
 import {
   Card,
   CardContent,
@@ -43,7 +45,11 @@ export default async function ShowDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const data = await getShowById(id);
+  // Independent queries — fetch in parallel.
+  const [data, brief] = await Promise.all([
+    getShowById(id),
+    getLatestBriefForShow(id),
+  ]);
   if (!data) notFound();
 
   const {
@@ -139,6 +145,76 @@ export default async function ShowDetailPage({
       </div>
 
       <div className="px-12 pb-12">
+        {/* Deal Brief CTA — shows brief status and routes to /brief */}
+        <div className="mb-6 mt-1">
+          {brief?.status === "confirmed" ? (
+            <Link
+              href={`/shows/${show.id}/brief`}
+              className="flex items-center justify-between gap-3 rounded-lg bg-brand-50/40 ring-1 ring-brand-200/60 px-5 py-3 hover:bg-brand-50/70 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <FileCheck2 className="h-4 w-4 text-brand-700" />
+                <div>
+                  <div className="text-[13px] font-medium text-ink-900">
+                    Deal Brief confirmed
+                  </div>
+                  <div className="text-[11.5px] text-ink-500">
+                    Settlement will read from the brief.
+                  </div>
+                </div>
+              </div>
+              <span className="text-[12px] text-brand-700 font-medium group-hover:underline">
+                View brief →
+              </span>
+            </Link>
+          ) : brief ? (
+            <Link
+              href={`/shows/${show.id}/brief`}
+              className="flex items-center justify-between gap-3 rounded-lg bg-amber-50/40 ring-1 ring-amber-200/60 px-5 py-3 hover:bg-amber-50/70 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-4 w-4 text-amber-700" />
+                <div>
+                  <div className="text-[13px] font-medium text-ink-900">
+                    {brief.status === "awaiting_confirmation"
+                      ? "Brief awaiting agent reply"
+                      : "Deal Brief in draft"}
+                  </div>
+                  <div className="text-[11.5px] text-ink-500">
+                    {brief.status === "awaiting_confirmation"
+                      ? "Paste the agent's reply to lock the brief."
+                      : "Confirm the deal in writing before settlement."}
+                  </div>
+                </div>
+              </div>
+              <span className="text-[12px] text-amber-800 font-medium group-hover:underline">
+                Resume →
+              </span>
+            </Link>
+          ) : (
+            <Link
+              href={`/shows/${show.id}/brief`}
+              className="flex items-center justify-between gap-3 rounded-lg bg-canvas-soft ring-1 ring-ink-200/60 px-5 py-3 hover:bg-white transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-4 w-4 text-ink-500" />
+                <div>
+                  <div className="text-[13px] font-medium text-ink-900">
+                    Confirm the deal before settlement
+                  </div>
+                  <div className="text-[11.5px] text-ink-500">
+                    Paste the deal email, surface any ambiguity, lock the
+                    terms both sides agreed to.
+                  </div>
+                </div>
+              </div>
+              <span className="text-[12px] text-ink-700 font-medium group-hover:underline">
+                Open brief →
+              </span>
+            </Link>
+          )}
+        </div>
+
         {show.internalNotes && (
           <div className="mb-8 mt-1 rounded-lg bg-amber-50/50 ring-1 ring-amber-200/60 p-5 flex gap-3">
             <AlertCircle className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />

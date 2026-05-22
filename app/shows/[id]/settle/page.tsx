@@ -11,8 +11,10 @@ import {
   XCircle,
   Wallet,
   TrendingUp,
+  FileCheck2,
+  Info,
 } from "lucide-react";
-import { getShowById } from "@/lib/queries";
+import { getShowById, getConfirmedBriefForShow } from "@/lib/queries";
 import {
   Card,
   CardContent,
@@ -22,7 +24,14 @@ import {
   Field,
 } from "@/components/ui/card";
 import { StatusBadge, DealTypeBadge, PlainBadge } from "@/components/ui/badge";
-import { calculateSettlement } from "@/lib/dealMath";
+import { Tooltip } from "@/components/ui/tooltip";
+import {
+  calculateSettlement,
+  calculateSettlementFromBrief,
+  type BriefCalculation,
+  type BriefStep,
+} from "@/lib/dealMath";
+import { parseDealBrief, type DealBrief } from "@/lib/dealBrief";
 import {
   formatMoney,
   formatShowDateFull,
@@ -45,7 +54,14 @@ export default async function SettlePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const data = await getShowById(id);
+  // Confirmed brief, when present, becomes the source of truth — the
+  // brief-aware calculator takes over (handles vs/pct_of_net/door deals
+  // that the legacy calculator returns "unsupported" for).
+  // Both queries are independent — fetch in parallel.
+  const [data, briefRow] = await Promise.all([
+    getShowById(id),
+    getConfirmedBriefForShow(id),
+  ]);
   if (!data) notFound();
 
   const { show, artist, deal, ticketSales, expenses, settlement, recoups } =
@@ -62,12 +78,28 @@ export default async function SettlePage({
     );
   }
 
-  const calc = calculateSettlement({
-    deal,
-    ticketSales,
-    expenses,
-    venueCapacity: data.venue?.capacity ?? undefined,
-  });
+  const confirmedBrief: DealBrief | null = briefRow
+    ? parseDealBrief(briefRow.extractedJson)
+    : null;
+
+  const briefCalc: BriefCalculation | null = confirmedBrief
+    ? calculateSettlementFromBrief({
+        brief: confirmedBrief,
+        ticketSales,
+        expenses,
+        venueCapacity: data.venue?.capacity ?? undefined,
+      })
+    : null;
+
+  // Legacy calculator — only consulted when no confirmed brief exists.
+  const calc = confirmedBrief
+    ? null
+    : calculateSettlement({
+        deal,
+        ticketSales,
+        expenses,
+        venueCapacity: data.venue?.capacity ?? undefined,
+      });
   const grossSoFar = ticketSales.reduce((sum, t) => sum + t.gross, 0);
   const totalFees = ticketSales.reduce((sum, t) => sum + t.fees, 0);
   const totalExpenses = expenses
@@ -127,7 +159,15 @@ export default async function SettlePage({
       )}
 
       <div className="space-y-6 mt-6">
-        {!calc.supported ? (
+        {briefCalc && briefCalc.supported ? (
+          <BriefBackedSettlement
+            calc={briefCalc}
+            brief={confirmedBrief!}
+            briefVersion={briefRow?.version ?? 1}
+            showId={show.id}
+            existingSettlement={settlement}
+          />
+        ) : calc && !calc.supported ? (
           <UnsupportedDeal
             dealType={calc.dealType}
             deal={deal}
@@ -137,10 +177,11 @@ export default async function SettlePage({
             totalExpenses={totalExpenses}
             ticketCount={ticketSales.reduce((s, t) => s + (t.qty ?? 0), 0)}
             expenseRowCount={expenses.length}
+            showId={show.id}
           />
-        ) : (
+        ) : calc ? (
           <SupportedSettlement calc={calc} existingSettlement={settlement} />
-        )}
+        ) : null}
 
         {recoups.length > 0 && <RecoupsSection recoups={recoups} />}
 
@@ -364,6 +405,7 @@ function UnsupportedDeal({
   totalExpenses,
   ticketCount,
   expenseRowCount,
+  showId,
 }: {
   dealType: string;
   deal: NonNullable<Awaited<ReturnType<typeof getShowById>>>["deal"];
@@ -375,6 +417,7 @@ function UnsupportedDeal({
   totalExpenses: number;
   ticketCount: number;
   expenseRowCount: number;
+  showId: string;
 }) {
   const friendly: Record<string, string> = {
     flat: "flat guarantee",
@@ -398,6 +441,14 @@ function UnsupportedDeal({
             Mariana would do this on a Google Sheet at 2am tonight. The inputs
             are below — but the math doesn&apos;t happen here.
           </p>
+          <Link
+            href={`/shows/${showId}/brief`}
+            className="inline-flex items-center gap-1.5 mt-6 px-4 h-9 rounded-lg bg-brand-700 text-white text-[13px] font-medium hover:bg-brand-800 shadow-sm shadow-brand-700/15 ring-1 ring-inset ring-brand-800/20 transition-colors"
+          >
+            <FileCheck2 className="h-3.5 w-3.5" />
+            Confirm the deal to unlock settlement
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </CardContent>
       </Card>
 
@@ -711,6 +762,217 @@ function Row({
       </div>
       <div className="text-[13.5px] text-ink-900 font-mono tabular">
         {value}
+      </div>
+    </div>
+  );
+}
+
+// ========================================================================
+// Brief-backed settlement. Rendered when a confirmed DealBrief exists for
+// the show. The hero number is the brief calculator's totalToArtist; each
+// worksheet step carries a citation back to the brief clause it derives
+// from, rendered as a hover tooltip via the native title attribute.
+// ========================================================================
+
+type SupportedBriefCalc = Extract<BriefCalculation, { supported: true }>;
+type PathTaken = SupportedBriefCalc["pathTaken"];
+
+const FLAVOR_LABEL: Record<PathTaken, string> = {
+  flat: "Flat",
+  percentage_of_gross: "% of gross",
+  percentage_of_net: "% of net",
+  vs_standard: "Vs · standard",
+  vs_walkout: "Vs · walkout pot",
+  vs_ratchet: "Vs · ratchet",
+  vs_gross: "Vs · gross",
+  door: "Door",
+};
+
+function BriefBackedSettlement({
+  calc,
+  brief,
+  briefVersion,
+  showId,
+  existingSettlement,
+}: {
+  calc: Extract<BriefCalculation, { supported: true }>;
+  brief: DealBrief;
+  briefVersion: number;
+  showId: string;
+  existingSettlement: Settlement | null;
+}) {
+  const divergence =
+    existingSettlement?.totalToArtist != null
+      ? existingSettlement.totalToArtist - calc.totalToArtist
+      : null;
+
+  return (
+    <>
+      {/* Confirmed-brief banner — signals the source of truth */}
+      <div className="rounded-lg border border-brand-200/60 bg-brand-50/30 px-5 py-3 flex items-start gap-3">
+        <FileCheck2 className="h-4 w-4 text-brand-700 mt-0.5 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-medium text-ink-900">
+            Settling from confirmed Deal Brief (v{briefVersion}) ·{" "}
+            <span className="text-brand-700">{FLAVOR_LABEL[calc.pathTaken]}</span>
+          </div>
+          <div className="text-[11.5px] text-ink-500 mt-0.5 leading-snug">
+            Every line below cites the brief clause it derives from. Hover any
+            step to see the source.
+          </div>
+        </div>
+        <Link
+          href={`/shows/${showId}/brief`}
+          className="text-[11.5px] text-brand-700 font-medium hover:underline shrink-0"
+        >
+          View brief →
+        </Link>
+      </div>
+
+      {/* Hero number */}
+      <div className="text-center py-10 mb-2">
+        <div className="eyebrow text-[10px] text-ink-400 mb-3">Total to artist</div>
+        <div
+          className="text-[72px] font-mono tabular font-bold text-ink-900 leading-none"
+          style={{ letterSpacing: "-0.03em" }}
+        >
+          {formatMoney(calc.totalToArtist)}
+        </div>
+        {existingSettlement?.totalToArtist != null && (
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <PlainBadge variant="default">
+              Originally {formatMoney(existingSettlement.totalToArtist)}
+            </PlainBadge>
+            {divergence != null && Math.abs(divergence) > 1 && (
+              <PlainBadge
+                variant={Math.abs(divergence) > 50 ? "rose" : "amber"}
+              >
+                {divergence > 0
+                  ? `Brief is $${Math.abs(divergence).toFixed(0)} less to artist`
+                  : `Brief is $${Math.abs(divergence).toFixed(0)} more to artist`}
+              </PlainBadge>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Worksheet — cited steps */}
+      <Card accent="brand">
+        <CardHeader>
+          <div>
+            <CardTitle>Settlement worksheet</CardTitle>
+            <CardDescription className="font-mono">
+              {calc.finalFormula}
+            </CardDescription>
+          </div>
+          <DealTypeBadge type={brief.dealType} />
+        </CardHeader>
+        <CardContent className="divide-y divide-ink-100/80">
+          {calc.steps.map((step, i) => (
+            <CitedRow key={i} step={step} />
+          ))}
+          <div className="pt-3" />
+          <div className="flex items-baseline justify-between py-3 font-semibold">
+            <span className="text-[13px] text-ink-900">Total to artist</span>
+            <span className="text-[18px] font-mono tabular text-ink-900">
+              {formatMoney(calc.totalToArtist)}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {calc.bonusesNotTriggered.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Bonuses not triggered</CardTitle>
+            <CardDescription>
+              Structured bonuses on this deal that didn&apos;t hit. Shown for
+              transparency so the agent can ask without surprise.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="divide-y divide-ink-100/80">
+            {calc.bonusesNotTriggered.map((b, i) => (
+              <div
+                key={i}
+                className="py-3 flex items-baseline justify-between gap-4"
+              >
+                <div className="min-w-0">
+                  <div className="text-[13px] text-ink-600">{b.label}</div>
+                  <div className="text-[11.5px] text-ink-400 mt-0.5">
+                    {b.reason}
+                  </div>
+                </div>
+                <div className="text-[12.5px] text-ink-300 font-mono tabular line-through">
+                  {formatMoney(b.amount)}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </>
+  );
+}
+
+function CitedRow({ step }: { step: BriefStep }) {
+  const isNegative = step.value < 0;
+  const formatted =
+    step.value === 0
+      ? formatMoney(0)
+      : isNegative
+        ? `−${formatMoney(Math.abs(step.value))}`
+        : formatMoney(step.value);
+
+  const citationLabel = step.citation ? (
+    <span>
+      <span className="text-ink-300 uppercase tracking-wider text-[10px] block mb-0.5">
+        Source
+      </span>
+      <span className="font-mono text-[11px] text-brand-200">
+        {step.citation.label}
+      </span>
+      {step.citation.detail && (
+        <span className="block mt-1 text-white/85">{step.citation.detail}</span>
+      )}
+    </span>
+  ) : null;
+
+  return (
+    <div className="flex items-baseline justify-between py-2.5 group/row">
+      <div className="min-w-0 flex items-center gap-2">
+        <div>
+          <div className="text-[13px] text-ink-700 group-hover/row:text-ink-900 transition-colors">
+            {step.label}
+          </div>
+          {step.note && (
+            <div className="text-[11.5px] text-ink-400 mt-0.5 max-w-md leading-snug">
+              {step.note}
+            </div>
+          )}
+        </div>
+        {step.citation && citationLabel && (
+          <Tooltip label={citationLabel}>
+            <span
+              className={[
+                "inline-flex items-center justify-center",
+                // generous hit target — easy to land on
+                "h-5 w-5 rounded-full",
+                "text-ink-400 hover:text-brand-700 hover:bg-brand-50",
+                "transition-colors cursor-help shrink-0",
+              ].join(" ")}
+              aria-label="View source citation"
+            >
+              <Info className="h-3.5 w-3.5" />
+            </span>
+          </Tooltip>
+        )}
+      </div>
+      <div
+        className={`text-[13.5px] font-mono tabular ${
+          isNegative ? "text-rose-700" : "text-ink-900"
+        }`}
+      >
+        {formatted}
       </div>
     </div>
   );

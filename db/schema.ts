@@ -7,7 +7,7 @@
  * in the data but don't have UI here.
  */
 
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, blob } from "drizzle-orm/sqlite-core";
 
 // -------- Users (operator accounts at the venue) --------
 
@@ -281,6 +281,60 @@ export const settlements = sqliteTable("settlements", {
   notes: text("notes"),
 });
 
+// -------- Deal Briefs --------
+
+/**
+ * The Deal Brief — the artifact built by the Deal Modeling slice.
+ *
+ * A Wednesday-confirmed, structured representation of the deal that both
+ * the venue and the agent have agreed to in writing before the show. Once
+ * confirmed, the settlement engine reads from the brief instead of the
+ * loose `deals` row — giving it the typed inputs needed to handle Vs
+ * deals, percentage-of-net, door, and the four Vs flavors end-to-end.
+ *
+ * Lifecycle:
+ *   draft → awaiting_confirmation → confirmed
+ *                                 ↘ superseded (when a new version replaces it)
+ *
+ * The settlement engine falls back to the legacy `deals` row when no
+ * confirmed brief exists — backwards compatible by construction.
+ *
+ * extractedJson schema is the DealBrief zod type in lib/dealBrief.ts.
+ * ambiguitiesJson schema:
+ *   [{ span: { start, end }, readingA, readingB, dollarImpact, resolved? }]
+ * contradictionsJson schema:
+ *   [{ kind, message, severity: 'info'|'warn'|'high', evidence }]
+ */
+export const dealBriefs = sqliteTable("deal_briefs", {
+  id: text("id").primaryKey(),
+  dealId: text("deal_id")
+    .notNull()
+    .references(() => deals.id),
+  version: integer("version").notNull().default(1),
+  status: text("status", {
+    enum: ["draft", "awaiting_confirmation", "confirmed", "superseded"],
+  })
+    .notNull()
+    .default("draft"),
+
+  sourceEmailText: text("source_email_text").notNull(),
+  sourceEmailHash: text("source_email_hash").notNull(),
+
+  extractedJson: text("extracted_json").notNull(),
+  ambiguitiesJson: text("ambiguities_json"),
+  contradictionsJson: text("contradictions_json"),
+  embeddingBlob: blob("embedding_blob"),
+
+  confirmedAt: integer("confirmed_at", { mode: "timestamp" }),
+  confirmedVia: text("confirmed_via", {
+    enum: ["email_reply", "manual_override"],
+  }),
+  agentReplyText: text("agent_reply_text"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  createdByUserId: text("created_by_user_id").references(() => users.id),
+});
+
 // -------- Type exports for convenience --------
 
 export type User = typeof users.$inferSelect;
@@ -294,6 +348,8 @@ export type TicketSale = typeof ticketSales.$inferSelect;
 export type Comp = typeof comps.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type Settlement = typeof settlements.$inferSelect;
+export type DealBriefRow = typeof dealBriefs.$inferSelect;
+export type DealBriefStatus = DealBriefRow["status"];
 
 // -------- Decoded JSON helpers --------
 

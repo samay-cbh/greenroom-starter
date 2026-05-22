@@ -14,9 +14,11 @@ import {
   expenses,
   settlements,
   venues,
+  dealBriefs,
   type Recoup,
+  type DealBriefRow,
 } from "@/db/schema";
-import { desc, asc, eq, sql, lte } from "drizzle-orm";
+import { desc, asc, eq, sql, lte, and } from "drizzle-orm";
 
 function todayDateString(): string {
   const d = new Date();
@@ -230,3 +232,55 @@ export async function getReports() {
 }
 
 export type Reports = Awaited<ReturnType<typeof getReports>>;
+
+// -------- Deal Briefs --------
+
+/**
+ * Returns the latest brief for a given show (by `dealId`), regardless of
+ * status. If a confirmed brief exists, callers should prefer it; otherwise
+ * the latest draft is the working copy.
+ */
+export async function getLatestBriefForShow(
+  showId: string,
+): Promise<DealBriefRow | null> {
+  const dealRow = await db
+    .select({ id: deals.id })
+    .from(deals)
+    .where(eq(deals.showId, showId))
+    .limit(1);
+  if (dealRow.length === 0) return null;
+  const dealId = dealRow[0].id;
+
+  const briefs = await db
+    .select()
+    .from(dealBriefs)
+    .where(eq(dealBriefs.dealId, dealId))
+    .orderBy(desc(dealBriefs.version), desc(dealBriefs.createdAt))
+    .limit(1);
+  return briefs[0] ?? null;
+}
+
+/**
+ * Returns the latest CONFIRMED brief for a show, or null. The settlement
+ * engine uses this to decide whether to trust the brief or fall back to
+ * the legacy `deals` row.
+ */
+export async function getConfirmedBriefForShow(
+  showId: string,
+): Promise<DealBriefRow | null> {
+  const dealRow = await db
+    .select({ id: deals.id })
+    .from(deals)
+    .where(eq(deals.showId, showId))
+    .limit(1);
+  if (dealRow.length === 0) return null;
+  const dealId = dealRow[0].id;
+
+  const briefs = await db
+    .select()
+    .from(dealBriefs)
+    .where(and(eq(dealBriefs.dealId, dealId), eq(dealBriefs.status, "confirmed")))
+    .orderBy(desc(dealBriefs.version))
+    .limit(1);
+  return briefs[0] ?? null;
+}
