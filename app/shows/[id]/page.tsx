@@ -26,6 +26,7 @@ import {
   relativeShowDate,
 } from "@/lib/format";
 import type { Bonus } from "@/db/schema";
+import { PreSettlementBrief } from "./PreSettlementBrief";
 
 const COMP_LABELS: Record<string, string> = {
   artist_gl: "Artist guest list",
@@ -139,6 +140,20 @@ export default async function ShowDetailPage({
       </div>
 
       <div className="px-12 pb-12">
+        {deal?.dealNotesFreetext && show.status === "advanced" && (
+          <PreSettlementBrief
+            showId={show.id}
+            dealNotes={deal.dealNotesFreetext}
+            dealType={deal.dealType}
+            guaranteeAmount={deal.guaranteeAmount ?? null}
+            percentage={deal.percentage ?? null}
+            expenseCap={deal.expenseCap ?? null}
+            hospitalityCap={deal.hospitalityCap ?? null}
+            totalExpenses={totalExpenses}
+            showDate={show.date}
+            artistName={artist?.name ?? "Unknown Artist"}
+          />
+        )}
         {show.internalNotes && (
           <div className="mb-8 mt-1 rounded-lg bg-amber-50/50 ring-1 ring-amber-200/60 p-5 flex gap-3">
             <AlertCircle className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />

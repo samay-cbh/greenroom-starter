@@ -62,6 +62,19 @@ You'll see something like:
 
 ✓ Ready in 1.2s
 ```
+## AI Pre-Settlement Brief (API Key Required)
+
+The pre-settlement brief uses the Anthropic API. To enable it locally:
+
+1. Create a `.env.local` file in the project root
+2. Add your Anthropic API key:
+ANTHROPIC_API_KEY=your-key-here
+3. Restart the dev server
+
+Get a free API key at https://console.anthropic.com
+
+The brief will show "Brief unavailable" without a key — all other features (including the Vs deal calculator) work normally without it.
+
 
 ### 5. Open it in your browser
 
